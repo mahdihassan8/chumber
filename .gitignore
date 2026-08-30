@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+
+# Uploads
+backend/app/static/uploads/*
+!backend/app/static/uploads/products/
+!backend/app/static/uploads/avatars/
+!backend/app/static/uploads/products/.gitkeep
+!backend/app/static/uploads/avatars/.gitkeep
+
+# Editor
+.DS_Store
+*.log
