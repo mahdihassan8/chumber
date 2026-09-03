@@ -142,3 +142,41 @@ def test_admin_orders_list_includes_buyer_info(client: TestClient, db: Session, 
     order = next(o for o in response.json() if o["id"] == order_id)
     assert order["user_username"] == customer.username
     assert order["user_full_name"] == customer.full_name
+
+
+def test_customer_cannot_delete_users(client: TestClient, customer: User, admin: User) -> None:
+    headers = auth_headers(client, customer.username, "password123")
+    response = client.delete(f"/api/users/{admin.id}", headers=headers)
+    assert response.status_code == 403
+
+
+def test_admin_can_delete_user_with_no_history(client: TestClient, admin: User, customer: User) -> None:
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.delete(f"/api/users/{customer.id}", headers=headers)
+    assert response.status_code == 204
+
+    get_resp = client.get(f"/api/users/{customer.id}", headers=headers)
+    assert get_resp.status_code == 404
+
+
+def test_admin_cannot_delete_own_account(client: TestClient, admin: User) -> None:
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.delete(f"/api/users/{admin.id}", headers=headers)
+    assert response.status_code == 400
+
+
+def test_admin_cannot_delete_user_with_orders(client: TestClient, db: Session, admin: User, customer: User) -> None:
+    from tests.conftest import make_product
+
+    product = make_product(db, price=5, stock=10)
+    customer_headers = auth_headers(client, customer.username, "password123")
+    client.post("/api/cart/items", json={"product_id": str(product.id), "quantity": 1}, headers=customer_headers)
+    checkout_resp = client.post("/api/orders/checkout", headers=customer_headers)
+    assert checkout_resp.status_code == 200
+
+    admin_headers = auth_headers(client, admin.username, "password123")
+    response = client.delete(f"/api/users/{customer.id}", headers=admin_headers)
+    assert response.status_code == 400
+
+    get_resp = client.get(f"/api/users/{customer.id}", headers=admin_headers)
+    assert get_resp.status_code == 200

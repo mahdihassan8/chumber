@@ -1,6 +1,7 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_admin
@@ -76,6 +77,19 @@ def update_user(
     user = user_service.get_user_or_404(db, user_id)
     user = user_service.update_user_by_admin(db, user, payload)
     return UserRead.model_validate(user)
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(user_id: uuid.UUID, current_admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> None:
+    user = user_service.get_user_or_404(db, user_id)
+    try:
+        user_service.delete_user(db, user, current_admin)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This user has existing orders, transactions, or other history and cannot be deleted; deactivate it instead",
+        )
 
 
 @router.post("/{user_id}/password", response_model=MessageResponse)

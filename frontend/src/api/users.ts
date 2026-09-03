@@ -32,6 +32,10 @@ export function updateUser(id: string, payload: UpdateUserInput): Promise<User> 
   return api.patch<User>(`/api/users/${id}`, payload);
 }
 
+export function deleteUser(id: string): Promise<void> {
+  return api.delete<void>(`/api/users/${id}`);
+}
+
 export interface MessageResponse {
   message: string;
 }

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { listUsers, updateUser } from "@/api/users";
+import { deleteUser, listUsers, updateUser } from "@/api/users";
 import type { User } from "@/types";
 import { DataTable, type Column } from "@/components/admin/DataTable";
 import { Avatar } from "@/components/common/Avatar";
 import { Badge } from "@/components/common/Badge";
 import { Button } from "@/components/common/Button";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ErrorState } from "@/components/common/ErrorState";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { formatByCurrency, formatDate } from "@/utils/assets";
 import { ApiRequestError } from "@/api/client";
@@ -17,8 +19,10 @@ export function UserManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<User | null>(null);
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { user: currentAdmin } = useAuth();
 
   const load = () => {
     setIsLoading(true);
@@ -41,6 +45,19 @@ export function UserManagementPage() {
       showToast(err instanceof ApiRequestError ? err.message : "Could not update user", "error");
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    try {
+      await deleteUser(pendingDelete.id);
+      setUsers((prev) => prev.filter((u) => u.id !== pendingDelete.id));
+      showToast("User deleted", "success");
+    } catch (err) {
+      showToast(err instanceof ApiRequestError ? err.message : "Could not delete user", "error");
+    } finally {
+      setPendingDelete(null);
     }
   };
 
@@ -85,6 +102,11 @@ export function UserManagementPage() {
           >
             {u.is_active ? "Deactivate" : "Activate"}
           </Button>
+          {u.id !== currentAdmin?.id && (
+            <Button variant="ghost" className="px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50" onClick={() => setPendingDelete(u)}>
+              Delete
+            </Button>
+          )}
         </div>
       ),
       className: "text-right",
@@ -98,6 +120,16 @@ export function UserManagementPage() {
         <Button onClick={() => navigate("/admin/users/new")}>+ Create user</Button>
       </div>
       {error ? <ErrorState message={error} onRetry={load} /> : <DataTable columns={columns} rows={filtered} rowKey={(u) => u.id} isLoading={isLoading} emptyTitle="No users found" />}
+
+      <ConfirmDialog
+        isOpen={!!pendingDelete}
+        title="Delete user"
+        message={`Are you sure you want to delete "${pendingDelete?.full_name}"? This cannot be undone. Users with existing orders or transactions can't be deleted — deactivate them instead.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

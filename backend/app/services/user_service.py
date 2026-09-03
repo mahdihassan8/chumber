@@ -46,6 +46,13 @@ def create_user(db: Session, payload: UserCreate) -> User:
     return user
 
 
+def delete_user(db: Session, user: User, current_admin: User) -> None:
+    if user.id == current_admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own account")
+    UserRepository(db).delete(user)
+    db.commit()
+
+
 def update_user_by_admin(db: Session, user: User, payload: UserUpdateByAdmin) -> User:
     if payload.email is not None and payload.email != user.email:
         if UserRepository(db).get_by_email_excluding(payload.email, user.id) is not None:
