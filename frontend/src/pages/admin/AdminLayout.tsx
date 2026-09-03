@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { InfoPopover } from "@/components/common/InfoPopover";
 
 const NAV_ITEMS = [
   { to: "/admin", label: "Overview", end: true, icon: "M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" },
@@ -15,7 +16,13 @@ export function AdminLayout() {
   return (
     <PageContainer className="max-w-[1400px]">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-900">Admin Dashboard</h1>
+        <div className="flex items-center gap-1.5">
+          <h1 className="text-2xl font-bold text-zinc-900">Admin Dashboard</h1>
+          <InfoPopover label="Currency conversion info" title="Currency & Balance Conversion">
+            <p className="text-sm font-medium text-zinc-900">1000 IQD = 1 USD = 4 Beans</p>
+            <p className="text-xs text-zinc-500">All balance conversions in the system use this fixed rate.</p>
+          </InfoPopover>
+        </div>
         <p className="text-sm text-zinc-500">Manage users, products, orders and restocking</p>
       </div>
       <div className="flex flex-col gap-6 lg:flex-row">

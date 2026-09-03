@@ -1,9 +1,12 @@
 import difflib
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 
-from anthropic import Anthropic
 from fastapi import HTTPException, status
+from google import genai
+from google.genai import types
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -14,25 +17,20 @@ from app.repositories.ai_restock_repository import AIRestockRequestRepository
 from app.repositories.product_repository import ProductRepository
 from app.services.product_service import restock_product
 
-RESTOCK_TOOL = {
-    "name": "extract_restock_action",
-    "description": "Extract a structured restocking action from an admin's natural language request.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "action": {"type": "string", "enum": ["restock"], "description": "The action being requested."},
-            "product_name": {"type": "string", "description": "The name of the product to restock, as mentioned by the admin."},
-            "quantity": {"type": "integer", "description": "The number of units to add to stock."},
-        },
-        "required": ["action", "product_name", "quantity"],
-    },
-}
+GEMINI_MODEL = "gemini-3.6-flash"
+GEMINI_TIMEOUT_MS = 30_000
 
 SYSTEM_PROMPT = (
     "You extract structured restocking instructions from a marketplace admin's message. "
-    "Always call the extract_restock_action tool with your best interpretation of the product name "
-    "and the quantity to add. Never invent a quantity if none is given; if unclear, use 0."
+    "Always respond with your best interpretation of the product name and the quantity to add. "
+    "Never invent a quantity if none is given; if unclear, use 0."
 )
+
+
+class _RestockAction(BaseModel):
+    action: Literal["restock"] = "restock"
+    product_name: str
+    quantity: int
 
 
 def _find_matching_product(db: Session, product_name: str) -> Product | None:
@@ -62,45 +60,50 @@ def _find_matching_product(db: Session, product_name: str) -> Product | None:
 def parse_restock_message(db: Session, admin: User, message: str, input_type: AIRequestInputType) -> AIRestockRequest:
     repo = AIRestockRequestRepository(db)
 
-    if not settings.anthropic_api_key:
+    if not settings.gemini_api_key:
         request = AIRestockRequest(
             admin_id=admin.id,
             raw_input=message,
             input_type=input_type,
             status=AIRequestStatus.FAILED,
-            error_message="AI assistant is not configured (missing ANTHROPIC_API_KEY).",
+            error_message="AI assistant is not configured (missing GEMINI_API_KEY).",
         )
         repo.add(request)
         db.commit()
         db.refresh(request)
         return request
 
-    client = Anthropic(api_key=settings.anthropic_api_key)
+    client = genai.Client(api_key=settings.gemini_api_key, http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS))
 
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=256,
-            system=SYSTEM_PROMPT,
-            tools=[RESTOCK_TOOL],
-            tool_choice={"type": "tool", "name": "extract_restock_action"},
-            messages=[{"role": "user", "content": message}],
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=message,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=_RestockAction,
+            ),
         )
     except Exception as exc:  # noqa: BLE001
+        # error_message is String(500) - a real API error (e.g. a verbose
+        # quota-exceeded message) can be much longer than that, which would
+        # otherwise turn this graceful-failure path into an unhandled DB
+        # error (StringDataRightTruncation) instead of a clean FAILED status.
         request = AIRestockRequest(
             admin_id=admin.id,
             raw_input=message,
             input_type=input_type,
             status=AIRequestStatus.FAILED,
-            error_message=f"AI request failed: {exc}",
+            error_message=f"AI request failed: {exc}"[:500],
         )
         repo.add(request)
         db.commit()
         db.refresh(request)
         return request
 
-    tool_use_block = next((block for block in response.content if block.type == "tool_use"), None)
-    if tool_use_block is None:
+    parsed = response.parsed
+    if parsed is None:
         request = AIRestockRequest(
             admin_id=admin.id,
             raw_input=message,
@@ -113,16 +116,15 @@ def parse_restock_message(db: Session, admin: User, message: str, input_type: AI
         db.refresh(request)
         return request
 
-    parsed = tool_use_block.input
-    product_name = str(parsed.get("product_name", "")).strip()
-    quantity = int(parsed.get("quantity", 0) or 0)
+    product_name = parsed.product_name.strip()
+    quantity = int(parsed.quantity or 0)
     matched_product = _find_matching_product(db, product_name) if product_name else None
 
     request = AIRestockRequest(
         admin_id=admin.id,
         raw_input=message,
         input_type=input_type,
-        parsed_action=str(parsed.get("action", "restock")),
+        parsed_action=parsed.action,
         parsed_product_name=product_name,
         parsed_quantity=quantity,
         resolved_product_id=matched_product.id if matched_product else None,

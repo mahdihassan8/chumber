@@ -16,11 +16,11 @@ class Settings(BaseSettings):
     # moment their password changes.
     access_token_expire_days: int = 7
 
-    anthropic_api_key: str = ""
+    gemini_api_key: str = ""
 
-    bootstrap_admin_username: str = "admin"
-    bootstrap_admin_email: str = "admin@stchumber.local"
-    bootstrap_admin_password: str = "ChangeMe123!"
+    bootstrap_admin_username: str = "mooane"
+    bootstrap_admin_email: str = "admin@stchumber.com"
+    bootstrap_admin_password: str = "Mm20051965"
 
     cors_origins: str = "http://localhost:5173"
 

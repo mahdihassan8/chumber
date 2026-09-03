@@ -8,7 +8,7 @@ A small private marketplace: registered users (Customers and Admins) browse a li
 - **Backend**: FastAPI, SQLAlchemy, Alembic
 - **Database**: PostgreSQL
 - **Auth**: JWT (bcrypt password hashing, role-based authorization)
-- **AI**: Anthropic Claude API (forced tool-use for structured restock extraction)
+- **AI**: Google Gemini API (structured JSON output for restock extraction)
 - **Voice**: browser Web Speech API (client-side transcription)
 - **Tests**: Pytest
 - **Containerization**: Docker Compose
@@ -17,7 +17,7 @@ A small private marketplace: registered users (Customers and Admins) browse a li
 
 ```bash
 cp backend/.env.example backend/.env
-# edit backend/.env and set ANTHROPIC_API_KEY if you want the AI restocking
+# edit backend/.env and set GEMINI_API_KEY if you want the AI restocking
 # assistant to work (it degrades gracefully to a "not configured" message
 # without it — everything else works fine).
 

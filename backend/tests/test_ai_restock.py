@@ -8,30 +8,26 @@ from app.models.user import User
 from tests.conftest import auth_headers, make_product
 
 
-class _FakeToolUseBlock:
-    def __init__(self, input_: dict) -> None:
-        self.type = "tool_use"
-        self.input = input_
-
-
-class _FakeMessages:
+class _FakeModels:
     def __init__(self, tool_input: dict) -> None:
         self._tool_input = tool_input
 
-    def create(self, **kwargs):  # noqa: ANN003, ANN201
-        return SimpleNamespace(content=[_FakeToolUseBlock(self._tool_input)])
+    def generate_content(self, **kwargs):  # noqa: ANN003, ANN201
+        from app.services.ai_service import _RestockAction
+
+        return SimpleNamespace(parsed=_RestockAction(**self._tool_input))
 
 
-class _FakeAnthropic:
+class _FakeGenaiClient:
     def __init__(self, tool_input: dict) -> None:
-        self.messages = _FakeMessages(tool_input)
+        self.models = _FakeModels(tool_input)
 
 
-def _patch_anthropic(monkeypatch: pytest.MonkeyPatch, tool_input: dict) -> None:
+def _patch_gemini(monkeypatch: pytest.MonkeyPatch, tool_input: dict) -> None:
     import app.services.ai_service as ai_service
 
-    monkeypatch.setattr(ai_service.settings, "anthropic_api_key", "test-key")
-    monkeypatch.setattr(ai_service, "Anthropic", lambda api_key: _FakeAnthropic(tool_input))
+    monkeypatch.setattr(ai_service.settings, "gemini_api_key", "test-key")
+    monkeypatch.setattr(ai_service.genai, "Client", lambda api_key, http_options=None: _FakeGenaiClient(tool_input))
 
 
 def test_customer_cannot_access_ai_parse(client: TestClient, customer: User) -> None:
@@ -57,7 +53,7 @@ def test_ai_parse_resolves_matching_product(
     client: TestClient, db: Session, admin: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     product = make_product(db, name="Coca Cola", stock=5)
-    _patch_anthropic(monkeypatch, {"action": "restock", "product_name": "Coca Cola", "quantity": 20})
+    _patch_gemini(monkeypatch, {"action": "restock", "product_name": "Coca Cola", "quantity": 20})
 
     headers = auth_headers(client, admin.username, "password123")
     response = client.post("/api/ai/restock/parse", json={"message": "Add 20 Coca Cola"}, headers=headers)
@@ -72,7 +68,7 @@ def test_ai_confirm_applies_stock_and_requires_admin(
     client: TestClient, db: Session, admin: User, customer: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     product = make_product(db, name="Coca Cola", stock=5)
-    _patch_anthropic(monkeypatch, {"action": "restock", "product_name": "Coca Cola", "quantity": 20})
+    _patch_gemini(monkeypatch, {"action": "restock", "product_name": "Coca Cola", "quantity": 20})
 
     admin_headers = auth_headers(client, admin.username, "password123")
     parse_resp = client.post("/api/ai/restock/parse", json={"message": "Add 20 Coca Cola"}, headers=admin_headers)
@@ -93,7 +89,7 @@ def test_ai_confirm_applies_stock_and_requires_admin(
 def test_ai_confirm_rejects_when_no_product_matched(
     client: TestClient, admin: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _patch_anthropic(monkeypatch, {"action": "restock", "product_name": "Nonexistent Product Xyz", "quantity": 10})
+    _patch_gemini(monkeypatch, {"action": "restock", "product_name": "Nonexistent Product Xyz", "quantity": 10})
     headers = auth_headers(client, admin.username, "password123")
     parse_resp = client.post("/api/ai/restock/parse", json={"message": "Add 10 Nonexistent Product Xyz"}, headers=headers)
     request_id = parse_resp.json()["id"]
@@ -107,7 +103,7 @@ def test_ai_reject_does_not_change_stock(
     client: TestClient, db: Session, admin: User, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     product = make_product(db, name="Coca Cola", stock=5)
-    _patch_anthropic(monkeypatch, {"action": "restock", "product_name": "Coca Cola", "quantity": 20})
+    _patch_gemini(monkeypatch, {"action": "restock", "product_name": "Coca Cola", "quantity": 20})
     headers = auth_headers(client, admin.username, "password123")
     parse_resp = client.post("/api/ai/restock/parse", json={"message": "Add 20 Coca Cola"}, headers=headers)
     request_id = parse_resp.json()["id"]
@@ -122,7 +118,7 @@ def test_ai_reject_does_not_change_stock(
 
 def test_voice_input_type_recorded(client: TestClient, db: Session, admin: User, monkeypatch: pytest.MonkeyPatch) -> None:
     make_product(db, name="Coca Cola", stock=5)
-    _patch_anthropic(monkeypatch, {"action": "restock", "product_name": "Coca Cola", "quantity": 15})
+    _patch_gemini(monkeypatch, {"action": "restock", "product_name": "Coca Cola", "quantity": 15})
     headers = auth_headers(client, admin.username, "password123")
     response = client.post(
         "/api/ai/restock/parse", json={"message": "Add fifteen bottles of Coca Cola", "input_type": "voice"}, headers=headers
