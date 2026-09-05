@@ -8,7 +8,7 @@ from app.models.giveaway import Giveaway, GiveawayWinner
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product
 from app.models.transaction import BalanceTransaction, TransactionType
-from app.models.user import Currency, User, UserRole
+from app.models.user import User, UserRole
 
 __all__ = [
     "AIRequestInputType",
@@ -16,7 +16,6 @@ __all__ = [
     "AIRestockRequest",
     "Cart",
     "CartItem",
-    "Currency",
     "Giveaway",
     "GiveawayWinner",
     "Order",

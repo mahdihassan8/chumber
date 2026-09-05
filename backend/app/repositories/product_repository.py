@@ -25,6 +25,11 @@ class ProductRepository(BaseRepository[Product]):
     def list_active(self) -> list[Product]:
         return self.db.query(Product).filter(Product.is_active.is_(True)).all()
 
+    def list_giveaway_eligible(self) -> list[Product]:
+        """Active products excluding Free (price 0) ones — a Free item is
+        already free, so it can't be offered as a giveaway prize."""
+        return self.db.query(Product).filter(Product.is_active.is_(True), Product.price > 0).all()
+
     def get_locked_map(self, product_ids: list[uuid.UUID]) -> dict[uuid.UUID, Product]:
         """SELECT ... FOR UPDATE with populate_existing for every product in
         `product_ids` — see UserRepository.get_locked for why populate_existing

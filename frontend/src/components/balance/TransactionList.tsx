@@ -1,7 +1,7 @@
 import type { BalanceTransaction } from "@/types";
 import { Badge } from "@/components/common/Badge";
 import { EmptyState } from "@/components/common/ErrorState";
-import { formatBeans, formatByCurrency, formatDateTime } from "@/utils/assets";
+import { formatBeans, formatIQD, formatDateTime } from "@/utils/assets";
 
 const TYPE_LABEL: Record<BalanceTransaction["transaction_type"], string> = {
   admin_recharge: "Admin Recharge",
@@ -19,15 +19,14 @@ const TYPE_COLOR: Record<BalanceTransaction["transaction_type"], "green" | "red"
 
 interface TransactionListProps {
   transactions: BalanceTransaction[];
-  /** Admin Dashboard views (default) show each transaction in its own
-   * account's real currency (USD/IQD — see BalanceTransaction.currency).
-   * The shopper-facing Profile page passes "beans" to show the converted,
-   * symbol-free marketplace currency instead. */
-  currency?: "usd" | "beans";
+  /** Admin Dashboard views (default) show raw IQD. The shopper-facing
+   * Profile page passes "beans" to show the converted marketplace unit
+   * instead. */
+  currency?: "iqd" | "beans";
 }
 
-export function TransactionList({ transactions, currency = "usd" }: TransactionListProps) {
-  const format = (txn: BalanceTransaction) => (currency === "beans" ? formatBeans(txn.amount) : formatByCurrency(txn.amount, txn.currency));
+export function TransactionList({ transactions, currency = "iqd" }: TransactionListProps) {
+  const format = (txn: BalanceTransaction) => (currency === "beans" ? formatBeans(txn.amount) : formatIQD(txn.amount));
 
   if (transactions.length === 0) {
     return <EmptyState title="No transactions yet" description="Balance activity will show up here." />;

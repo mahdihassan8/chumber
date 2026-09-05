@@ -14,7 +14,6 @@ from app.schemas.user import (
     AdminResetPasswordRequest,
     ChangePasswordRequest,
     MessageResponse,
-    SetCurrencyRequest,
     UserCreate,
     UserRead,
     UserUpdateByAdmin,
@@ -129,13 +128,4 @@ def subtract_user_balance(
 ) -> BalanceRead:
     user = user_service.get_user_or_404(db, user_id)
     balance_service.subtract_admin_balance(db, user=user, admin_id=admin.id, amount=payload.amount, description=payload.description)
-    return balance_service.get_balance_summary(db, user)
-
-
-@router.patch("/{user_id}/currency", response_model=BalanceRead)
-def set_user_currency(
-    user_id: uuid.UUID, payload: SetCurrencyRequest, _: User = Depends(require_admin), db: Session = Depends(get_db)
-) -> BalanceRead:
-    user = user_service.get_user_or_404(db, user_id)
-    user_service.set_currency(db, user, payload.currency)
     return balance_service.get_balance_summary(db, user)

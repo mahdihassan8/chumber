@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { Balance, Currency, User } from "@/types";
+import type { Balance, User } from "@/types";
 import { getUserBalance, addUserBalance, subtractUserBalance } from "@/api/balance";
 import { Avatar } from "@/components/common/Avatar";
 import { Badge } from "@/components/common/Badge";
@@ -11,15 +11,14 @@ import { Skeleton } from "@/components/common/Skeleton";
 import { ErrorState } from "@/components/common/ErrorState";
 import { BalanceBreakdown } from "@/components/balance/BalanceBreakdown";
 import { TransactionList } from "@/components/balance/TransactionList";
-import { CurrencySwitcher } from "@/components/balance/CurrencySwitcher";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { formatByCurrency } from "@/utils/assets";
+import { formatIQD, toBeans } from "@/utils/assets";
 import { ApiRequestError } from "@/api/client";
 
 interface UserBalanceRowProps {
   user: User;
-  onBalanceChanged: (userId: string, newBalance: number, newCurrency: Currency) => void;
+  onBalanceChanged: (userId: string, newBalance: number) => void;
 }
 
 type BalanceModalMode = "add" | "subtract" | null;
@@ -60,23 +59,16 @@ export function UserBalanceRow({ user, onBalanceChanged }: UserBalanceRowProps) 
     setFormError(null);
   };
 
-  const handleCurrencyChanged = (newCurrency: Currency, newBalance: number) => {
-    setDetail((prev) => (prev ? { ...prev, currency: newCurrency, balance: newBalance } : prev));
-    onBalanceChanged(user.id, newBalance, newCurrency);
-    if (authUser && authUser.id === user.id) setAuthUser({ ...authUser, currency: newCurrency, balance: newBalance });
-  };
-
   const handleSubmitBalanceChange = async () => {
     const value = Number(amount);
     if (!value || value <= 0) {
       setFormError("Enter an amount greater than 0");
       return;
     }
-    // Quarter increments only — mirrors the backend's multiple_of=0.25
-    // validation. Multiplying by 4 sidesteps float precision issues since
-    // 0.25 is exactly representable in binary.
-    if (Math.round(value * 4) !== value * 4) {
-      setFormError("Amount must be in increments of 0.25");
+    // 250 IQD increments only — mirrors the backend's multiple_of=250
+    // validation, and keeps the customer's Beans balance a whole number.
+    if (value % 250 !== 0) {
+      setFormError("Amount must be in increments of 250 IQD (1 Bean)");
       return;
     }
     setFormError(null);
@@ -87,14 +79,14 @@ export function UserBalanceRow({ user, onBalanceChanged }: UserBalanceRowProps) 
           ? await subtractUserBalance(user.id, value, description || undefined)
           : await addUserBalance(user.id, value, description || undefined);
       setDetail(updated);
-      onBalanceChanged(user.id, updated.balance, updated.currency);
+      onBalanceChanged(user.id, updated.balance);
       // An admin can recharge/deduct their own account (Admin = Customer too)
       // — when that's who this row is for, the navbar/profile balance reads
       // from AuthContext, not this page's local state, so it needs its own
       // update or it'd stay stale until a manual refresh.
       if (authUser?.id === user.id) setAuthUser({ ...authUser, balance: updated.balance });
       showToast(
-        `${modalMode === "subtract" ? "Subtracted" : "Added"} ${formatByCurrency(value, updated.currency)} ${modalMode === "subtract" ? "from" : "to"} ${user.full_name}`,
+        `${modalMode === "subtract" ? "Subtracted" : "Added"} ${formatIQD(value)} ${modalMode === "subtract" ? "from" : "to"} ${user.full_name}`,
         "success"
       );
       closeModal();
@@ -125,8 +117,7 @@ export function UserBalanceRow({ user, onBalanceChanged }: UserBalanceRowProps) 
           </div>
           <Badge color={user.role === "admin" ? "blue" : "zinc"}>{user.role}</Badge>
         </button>
-        <span className="font-bold text-zinc-900">{formatByCurrency(user.balance, detail?.currency ?? user.currency)}</span>
-        <CurrencySwitcher userId={user.id} currency={detail?.currency ?? user.currency} onChanged={handleCurrencyChanged} />
+        <span className="font-bold text-zinc-900">{formatIQD(user.balance)}</span>
         <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => setModalMode("add")}>
           + Add balance
         </Button>
@@ -143,7 +134,7 @@ export function UserBalanceRow({ user, onBalanceChanged }: UserBalanceRowProps) 
             <ErrorState message={error} onRetry={loadDetail} />
           ) : detail ? (
             <div className="space-y-4">
-              <BalanceBreakdown totalReceived={detail.total_received} totalSpent={detail.total_spent} balance={detail.balance} currency={detail.currency} />
+              <BalanceBreakdown totalReceived={detail.total_received} totalSpent={detail.total_spent} balance={detail.balance} />
               <div>
                 <p className="mb-1.5 text-sm font-semibold text-zinc-900">Transaction History</p>
                 <div className="card px-4">
@@ -163,13 +154,14 @@ export function UserBalanceRow({ user, onBalanceChanged }: UserBalanceRowProps) 
       >
         <div className="space-y-4">
           <TextField
-            label={`Amount (${detail?.currency ?? user.currency})`}
+            label="Amount (IQD)"
             name="amount"
             type="number"
-            min="0.25"
-            step="0.25"
+            min="250"
+            step="250"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            hint={Number(amount) > 0 ? `= ${toBeans(Number(amount)).toLocaleString()} Beans for the customer` : "250 IQD = 1 Bean"}
             autoFocus
           />
           <TextField label="Description (optional)" name="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Monthly top-up" />

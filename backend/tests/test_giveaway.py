@@ -297,6 +297,40 @@ def test_client_supplied_time_is_ignored(client: TestClient, db: Session, monkey
     assert response.json()["available"] is False
 
 
+# ---------------------------------------------------------------------------
+# Free products excluded from the prize pool
+# ---------------------------------------------------------------------------
+
+
+def test_free_product_never_selected_as_prize(client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch, admin: User) -> None:
+    make_user(db, username="freecand1", password="password123", role=UserRole.CUSTOMER)
+    make_user(db, username="freecand2", password="password123", role=UserRole.CUSTOMER)
+    make_product(db, name="Free Giveaway Bait", price=0, stock=10)
+    paid = make_product(db, name="Only Paid Prize", price=5, stock=10)
+    sunday = _next_occurrence(SUNDAY)
+    _freeze(monkeypatch, _at(sunday, 11, 5))
+
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.get("/api/giveaway", headers=headers)
+    body = response.json()
+    assert body["available"] is True
+    assert body["product_name"] == paid.name
+
+
+def test_giveaway_not_generated_when_only_free_products_exist(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch, admin: User
+) -> None:
+    make_user(db, username="onlyfree1", password="password123", role=UserRole.CUSTOMER)
+    make_user(db, username="onlyfree2", password="password123", role=UserRole.CUSTOMER)
+    make_product(db, name="Only Free Item", price=0, stock=10)
+    sunday = _next_occurrence(SUNDAY)
+    _freeze(monkeypatch, _at(sunday, 11, 5))
+
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.get("/api/giveaway", headers=headers)
+    assert response.json()["available"] is False
+
+
 def test_two_different_users_get_independently_correct_winner_status(
     client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:

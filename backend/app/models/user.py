@@ -14,11 +14,6 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
 
 
-class Currency(str, enum.Enum):
-    USD = "USD"
-    IQD = "IQD"
-
-
 class User(Base):
     __tablename__ = "users"
 
@@ -29,14 +24,10 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role"), default=UserRole.CUSTOMER, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Iraqi Dinar — the single stored money unit across the whole app. The
+    # shopper-facing UI converts to Beans for display only (250 IQD = 1 Bean);
+    # the Admin Dashboard shows this raw IQD figure.
     balance: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)
-    # The currency this account's balance is denominated in — admin-selectable
-    # (see user_service.set_currency), never auto-converted. Every balance
-    # figure/transaction amount for this user is displayed in this currency;
-    # switching it just relabels the existing raw balance, it never rescales
-    # it. Lives on the account rather than per-transaction so a user's ledger
-    # can never mix currencies.
-    currency: Mapped[Currency] = mapped_column(Enum(Currency, name="currency"), default=Currency.USD, server_default=Currency.USD.value, nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Bumped on every password change; embedded in issued JWTs and checked on
     # every request (see core/deps.get_current_user). Since sessions now last

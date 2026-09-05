@@ -25,9 +25,8 @@ def record_transaction(
     Caller is responsible for the surrounding transaction/commit boundary so this
     can participate in a larger atomic operation (e.g. checkout). Caller must also
     have already locked+refreshed `user` (see add_admin_recharge below) — this
-    function trusts the balance it's given. The amount is always in `user.currency`
-    (see User.currency) — there's no per-transaction currency, so a user's ledger
-    can never mix currencies.
+    function trusts the balance it's given. `amount` is in IQD, the app's only
+    money unit.
     """
     user.balance = float(user.balance) + amount
     txn = BalanceTransaction(
@@ -54,7 +53,6 @@ def get_balance_summary(db: Session, user: User) -> BalanceRead:
 
     return BalanceRead(
         balance=float(user.balance),
-        currency=user.currency,
         total_received=float(received),
         total_spent=float(spent),
         transactions=[BalanceTransactionRead.model_validate(t) for t in transactions],

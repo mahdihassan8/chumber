@@ -79,35 +79,10 @@ def test_admin_overview_accessible_to_admin(client: TestClient, admin: User) -> 
     assert "total_users" in response.json()
 
 
-def test_admin_overview_recent_activity_shows_each_row_in_its_own_account_currency(
-    client: TestClient, db: Session, customer: User, admin: User
-) -> None:
-    """recent_transactions spans multiple users' ledgers — since currency now
-    lives on the account (not the transaction), each row must reflect its
-    own owning account's currency rather than one currency for the whole
-    feed."""
-    from tests.conftest import make_user
-
-    iqd_user = make_user(db, username="iqd_overview_user", password="password123", role=UserRole.CUSTOMER, balance=0)
-    headers = auth_headers(client, admin.username, "password123")
-
-    client.patch(f"/api/users/{iqd_user.id}/currency", json={"currency": "IQD"}, headers=headers)
-    client.post(f"/api/users/{iqd_user.id}/balance", json={"amount": 1000, "description": "iqd row"}, headers=headers)
-    client.post(f"/api/users/{customer.id}/balance", json={"amount": 25, "description": "usd row"}, headers=headers)
-
-    response = client.get("/api/admin/overview", headers=headers)
-    assert response.status_code == 200
-    txns = response.json()["recent_transactions"]
-    iqd_row = next(t for t in txns if t["description"] == "iqd row")
-    usd_row = next(t for t in txns if t["description"] == "usd row")
-    assert iqd_row["currency"] == "IQD"
-    assert usd_row["currency"] == "USD"
-
-
 def test_admin_is_also_a_normal_customer(client: TestClient, db: Session, admin: User) -> None:
     from tests.conftest import make_product
 
-    product = make_product(db, price=5, stock=10)
+    product = make_product(db, price=5_000, stock=10)
     headers = auth_headers(client, admin.username, "password123")
 
     add_resp = client.post("/api/cart/items", json={"product_id": str(product.id), "quantity": 2}, headers=headers)
@@ -115,7 +90,7 @@ def test_admin_is_also_a_normal_customer(client: TestClient, db: Session, admin:
 
     checkout_resp = client.post("/api/orders/checkout", headers=headers)
     assert checkout_resp.status_code == 200
-    assert checkout_resp.json()["new_balance"] == 90.0
+    assert checkout_resp.json()["new_balance"] == 90_000.0
 
 
 def test_customer_cannot_list_all_orders(client: TestClient, customer: User) -> None:
@@ -127,7 +102,7 @@ def test_customer_cannot_list_all_orders(client: TestClient, customer: User) -> 
 def test_admin_orders_list_includes_buyer_info(client: TestClient, db: Session, admin: User, customer: User) -> None:
     from tests.conftest import make_product
 
-    product = make_product(db, price=5, stock=10)
+    product = make_product(db, price=5_000, stock=10)
     customer_headers = auth_headers(client, customer.username, "password123")
     client.post("/api/cart/items", json={"product_id": str(product.id), "quantity": 1}, headers=customer_headers)
     checkout_resp = client.post("/api/orders/checkout", headers=customer_headers)
@@ -168,7 +143,7 @@ def test_admin_cannot_delete_own_account(client: TestClient, admin: User) -> Non
 def test_admin_cannot_delete_user_with_orders(client: TestClient, db: Session, admin: User, customer: User) -> None:
     from tests.conftest import make_product
 
-    product = make_product(db, price=5, stock=10)
+    product = make_product(db, price=5_000, stock=10)
     customer_headers = auth_headers(client, customer.username, "password123")
     client.post("/api/cart/items", json={"product_id": str(product.id), "quantity": 1}, headers=customer_headers)
     checkout_resp = client.post("/api/orders/checkout", headers=customer_headers)

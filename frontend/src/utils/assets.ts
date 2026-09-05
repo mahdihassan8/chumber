@@ -1,5 +1,4 @@
 import { API_URL } from "@/api/client";
-import type { Currency } from "@/types";
 
 /** Predefined avatars live in the frontend's own /public dir; uploaded
  * avatars/product images are served by the backend under /uploads. */
@@ -18,33 +17,26 @@ export function initials(name: string): string {
     .join("");
 }
 
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+/** Admin-side money display. Iraqi Dinar has no subunit in circulation and no
+ * symbol worth using, so it renders as a whole number with thousands
+ * separators and a trailing "IQD" label. */
+export function formatIQD(amount: number): string {
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(amount)} IQD`;
 }
 
-/** Formats a balance figure in the owning account's currency (User.currency
- * / Balance.currency) — no conversion. IQD has no ISO currency formatting
- * convention worth relying on here, so it's rendered as a plain number with
- * a trailing "IQD" label rather than through Intl's currency style; USD
- * shows the `$` symbol via formatCurrency. */
-export function formatByCurrency(amount: number, currency: Currency): string {
-  if (currency === "IQD") {
-    return `${new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)} IQD`;
-  }
-  return formatCurrency(amount);
+/** The backend stores everything in IQD — this is a display-only conversion
+ * for the marketplace/shopper-facing UI, which shows "Beans" instead: whole
+ * numbers, no symbol, no decimals. 250 IQD = 1 Bean (so 1,000 IQD = 4 Beans).
+ * Beans never appear in the Admin Dashboard, and IQD never appears in the
+ * shopper-facing UI. */
+export const IQD_PER_BEAN = 250;
+
+export function toBeans(iqdAmount: number): number {
+  return Math.round(iqdAmount / IQD_PER_BEAN);
 }
 
-/** The backend stores and the Admin Dashboard operates in USD — this is a
- * display-only conversion for the marketplace/shopper-facing UI, which shows
- * "Beans" instead: whole numbers, no currency symbol, no decimals. */
-export const USD_TO_BEANS_RATE = 4;
-
-export function toBeans(usdAmount: number): number {
-  return Math.round(usdAmount * USD_TO_BEANS_RATE);
-}
-
-export function formatBeans(usdAmount: number): string {
-  return new Intl.NumberFormat("en-US").format(toBeans(usdAmount));
+export function formatBeans(iqdAmount: number): string {
+  return new Intl.NumberFormat("en-US").format(toBeans(iqdAmount));
 }
 
 export function formatDate(iso: string): string {

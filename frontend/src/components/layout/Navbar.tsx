@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { Avatar } from "@/components/common/Avatar";
-import { formatBeans } from "@/utils/assets";
+import { formatBeans, formatIQD } from "@/utils/assets";
 
 const NAV_LINKS = [
   { to: "/", label: "Marketplace", end: true },
@@ -31,10 +31,16 @@ export function Navbar() {
   const { user, logout } = useAuth();
   const { itemCount } = useCart();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   if (!user) return null;
+
+  // Beans are the shopper-facing unit only. Inside the Admin Dashboard the
+  // same balance is shown in IQD, with no Beans icon, so the admin area never
+  // mixes the two units.
+  const inAdminArea = pathname.startsWith("/admin");
 
   const handleLogout = () => {
     logout();
@@ -70,8 +76,14 @@ export function Navbar() {
 
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1.5 text-xs font-semibold text-zinc-800 sm:gap-1.5 sm:px-3 sm:text-sm">
-            <img src="/bean-icon.png" alt="" className="h-4 w-4 shrink-0 object-contain object-center" />
-            {formatBeans(user.balance)}
+            {inAdminArea ? (
+              formatIQD(user.balance)
+            ) : (
+              <>
+                <img src="/bean-icon.png" alt="" className="h-4 w-4 shrink-0 object-contain object-center" />
+                {formatBeans(user.balance)}
+              </>
+            )}
           </div>
 
           <NavLink to="/cart" className="relative rounded-lg p-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900" aria-label="Cart">

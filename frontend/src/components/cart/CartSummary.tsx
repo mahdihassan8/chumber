@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { formatBeans } from "@/utils/assets";
+import { BeansAmount } from "@/components/common/BeansAmount";
 
 interface CartSummaryProps {
   total: number;
@@ -16,16 +16,22 @@ export function CartSummary({ total, balance, children }: CartSummaryProps) {
       <div className="space-y-2 text-sm">
         <div className="flex justify-between text-zinc-600">
           <span>Subtotal</span>
-          <span className="font-medium text-zinc-900">{formatBeans(total)}</span>
+          <span className="font-medium text-zinc-900">
+            <BeansAmount amount={total} />
+          </span>
         </div>
         <div className="flex justify-between text-zinc-600">
           <span>Your balance</span>
-          <span className="font-medium text-zinc-900">{formatBeans(balance)}</span>
+          <span className="font-medium text-zinc-900">
+            <BeansAmount amount={balance} />
+          </span>
         </div>
         <div className="border-t border-zinc-100 pt-2">
           <div className="flex justify-between">
             <span className="font-semibold text-zinc-900">Total</span>
-            <span className="text-lg font-bold text-zinc-900">{formatBeans(total)}</span>
+            <span className="text-lg font-bold text-zinc-900">
+              <BeansAmount amount={total} />
+            </span>
           </div>
         </div>
       </div>

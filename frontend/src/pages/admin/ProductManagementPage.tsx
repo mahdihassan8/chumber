@@ -5,12 +5,13 @@ import type { Product } from "@/types";
 import { DataTable, type Column } from "@/components/admin/DataTable";
 import { ProductImage } from "@/components/product/ProductImage";
 import { StockBadge } from "@/components/product/StockBadge";
+import { FreeBadge } from "@/components/product/FreeBadge";
 import { Badge } from "@/components/common/Badge";
 import { Button } from "@/components/common/Button";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ErrorState } from "@/components/common/ErrorState";
 import { useToast } from "@/context/ToastContext";
-import { formatCurrency } from "@/utils/assets";
+import { formatIQD } from "@/utils/assets";
 import { ApiRequestError } from "@/api/client";
 
 export function ProductManagementPage() {
@@ -54,12 +55,12 @@ export function ProductManagementPage() {
       header: "Product",
       render: (p) => (
         <div className="flex items-center gap-3">
-          <ProductImage src={p.image_url} alt={p.name} className="h-10 w-10 rounded-md" />
+          <ProductImage src={p.image_url} alt={p.name} className="h-12 w-12 shrink-0 rounded-lg" />
           <span className="line-clamp-1 font-medium text-zinc-900">{p.name}</span>
         </div>
       ),
     },
-    { key: "price", header: "Price", render: (p) => formatCurrency(p.price) },
+    { key: "price", header: "Price", render: (p) => (p.is_free ? <FreeBadge /> : formatIQD(p.price)) },
     { key: "stock", header: "Stock", render: (p) => <span className="tabular-nums">{p.stock_quantity}</span> },
     { key: "availability", header: "Availability", render: (p) => <StockBadge stock={p.stock_quantity} isAvailable={p.is_available} /> },
     { key: "status", header: "Listed", render: (p) => <Badge color={p.is_active ? "green" : "zinc"}>{p.is_active ? "Active" : "Hidden"}</Badge> },

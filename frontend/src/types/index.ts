@@ -1,5 +1,4 @@
 export type UserRole = "customer" | "admin";
-export type Currency = "USD" | "IQD";
 
 export interface User {
   id: string;
@@ -8,10 +7,9 @@ export interface User {
   full_name: string;
   role: UserRole;
   is_active: boolean;
+  /** IQD — the only money unit the API speaks. Shopper-facing UI converts to
+   * Beans for display (250 IQD = 1 Bean); the Admin Dashboard shows raw IQD. */
   balance: number;
-  /** The currency this account's balance is denominated in — admin-selectable,
-   * never converted. Drives formatting everywhere the balance is shown. */
-  currency: Currency;
   avatar_url: string | null;
   created_at: string;
 }
@@ -25,6 +23,9 @@ export interface Product {
   image_url: string | null;
   is_active: boolean;
   is_available: boolean;
+  /** True when price is exactly 0 — a Free product (see backend Product.is_free).
+   * Free products are excluded from giveaway prize selection. */
+  is_free: boolean;
   created_at: string;
 }
 
@@ -73,12 +74,8 @@ export type TransactionType = "admin_recharge" | "purchase" | "refund" | "adjust
 export interface BalanceTransaction {
   id: string;
   user_id: string;
+  /** IQD. */
   amount: number;
-  /** Derived server-side from the owning account's *current* User.currency
-   * — not admin-selectable per transaction. Lets a transaction list spanning
-   * multiple accounts (admin overview's recent-activity feed) render each
-   * row in its own account's currency. */
-  currency: Currency;
   transaction_type: TransactionType;
   related_order_id: string | null;
   created_by_id: string | null;
@@ -89,10 +86,6 @@ export interface BalanceTransaction {
 
 export interface Balance {
   balance: number;
-  /** The account's currency — see User.currency. Every transaction below
-   * carries this same value, since a balance's ledger can never mix
-   * currencies. */
-  currency: Currency;
   total_received: number;
   total_spent: number;
   transactions: BalanceTransaction[];

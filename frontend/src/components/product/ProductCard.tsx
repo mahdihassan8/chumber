@@ -2,10 +2,11 @@ import { Link } from "react-router-dom";
 import type { Product } from "@/types";
 import { ProductImage } from "@/components/product/ProductImage";
 import { StockBadge } from "@/components/product/StockBadge";
+import { FreeBadge } from "@/components/product/FreeBadge";
 import { QuantitySelector } from "@/components/product/QuantitySelector";
 import { Button } from "@/components/common/Button";
+import { BeansAmount } from "@/components/common/BeansAmount";
 import { useCart } from "@/context/CartContext";
-import { formatBeans } from "@/utils/assets";
 
 export function ProductCard({ product }: { product: Product }) {
   const { addItem, mutatingItemId, getSelectedQuantity, setSelectedQuantity } = useCart();
@@ -26,7 +27,7 @@ export function ProductCard({ product }: { product: Product }) {
         <ProductImage
           src={product.image_url}
           alt={product.name}
-          className="h-28 w-full transition-transform duration-300 group-hover:scale-[1.03] sm:h-40"
+          className="aspect-[4/3] w-full transition-transform duration-300 group-hover:scale-[1.03]"
         />
       </Link>
       <div className="flex flex-1 flex-col gap-2 p-4">
@@ -37,8 +38,13 @@ export function ProductCard({ product }: { product: Product }) {
         </div>
         <p className="line-clamp-2 flex-1 text-sm text-zinc-500">{product.description}</p>
         <div className="flex items-center justify-between pt-1">
-          <span className="text-lg font-bold text-zinc-900">{formatBeans(product.price)}</span>
-          <StockBadge stock={product.stock_quantity} isAvailable={product.is_available} />
+          <span className="text-lg font-bold text-zinc-900">
+            <BeansAmount amount={product.price} />
+          </span>
+          <div className="flex items-center gap-1.5">
+            {product.is_free && <FreeBadge />}
+            <StockBadge stock={product.stock_quantity} isAvailable={product.is_available} />
+          </div>
         </div>
         {product.is_available ? (
           <div className="mt-2 flex items-center gap-2">

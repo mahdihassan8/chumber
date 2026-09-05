@@ -25,3 +25,10 @@ class Product(Base):
     @property
     def is_available(self) -> bool:
         return self.is_active and self.stock_quantity > 0
+
+    @property
+    def is_free(self) -> bool:
+        """A product is free purely by having price 0 — no separate flag to
+        keep in sync. Giveaway prize selection excludes these (see
+        ProductRepository.list_giveaway_eligible)."""
+        return float(self.price) == 0

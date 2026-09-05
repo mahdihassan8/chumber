@@ -7,7 +7,7 @@ import { OrderList } from "@/components/orders/OrderList";
 import { TransactionList } from "@/components/balance/TransactionList";
 import { ErrorState } from "@/components/common/ErrorState";
 import { Skeleton } from "@/components/common/Skeleton";
-import { formatCurrency } from "@/utils/assets";
+import { formatIQD } from "@/utils/assets";
 import { ApiRequestError } from "@/api/client";
 
 const ICONS = {
@@ -61,7 +61,7 @@ export function OverviewPage() {
         <StatCard label="Available Products" value={stats.available_products} icon={<Icon path={ICONS.box} />} />
         <StatCard label="Out of Stock" value={stats.out_of_stock_products} icon={<Icon path={ICONS.warning} />} tone="warning" />
         <StatCard label="Total Orders" value={stats.total_orders} icon={<Icon path={ICONS.orders} />} />
-        <StatCard label="Balance Distributed" value={formatCurrency(stats.total_balance_distributed)} icon={<Icon path={ICONS.cash} />} />
+        <StatCard label="Balance Distributed" value={formatIQD(stats.total_balance_distributed)} icon={<Icon path={ICONS.cash} />} />
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

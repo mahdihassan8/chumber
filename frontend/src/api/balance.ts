@@ -1,5 +1,5 @@
 import { api } from "@/api/client";
-import type { Balance, Currency } from "@/types";
+import type { Balance } from "@/types";
 
 export function getMyBalance(): Promise<Balance> {
   return api.get<Balance>("/api/balance");
@@ -15,8 +15,4 @@ export function addUserBalance(userId: string, amount: number, description?: str
 
 export function subtractUserBalance(userId: string, amount: number, description?: string): Promise<Balance> {
   return api.post<Balance>(`/api/users/${userId}/balance/subtract`, { amount, description });
-}
-
-export function setUserCurrency(userId: string, currency: Currency): Promise<Balance> {
-  return api.patch<Balance>(`/api/users/${userId}/currency`, { currency });
 }

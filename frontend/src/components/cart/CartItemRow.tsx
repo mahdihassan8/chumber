@@ -2,8 +2,8 @@ import { Link } from "react-router-dom";
 import type { CartItem } from "@/types";
 import { ProductImage } from "@/components/product/ProductImage";
 import { QuantitySelector } from "@/components/product/QuantitySelector";
+import { BeansAmount } from "@/components/common/BeansAmount";
 import { useCart } from "@/context/CartContext";
-import { formatBeans } from "@/utils/assets";
 
 export function CartItemRow({ item }: { item: CartItem }) {
   const { updateItem, removeItem, mutatingItemId } = useCart();
@@ -12,20 +12,24 @@ export function CartItemRow({ item }: { item: CartItem }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-3 py-4">
       <Link to={`/products/${item.product.id}`} className="shrink-0">
-        <ProductImage src={item.product.image_url} alt={item.product.name} className="h-12 w-12 rounded-lg sm:h-16 sm:w-16" />
+        <ProductImage src={item.product.image_url} alt={item.product.name} className="h-14 w-14 shrink-0 rounded-lg sm:h-16 sm:w-16" />
       </Link>
       <div className="min-w-0 flex-1">
         <Link to={`/products/${item.product.id}`} className="line-clamp-1 font-medium text-zinc-900 hover:text-brand-700">
           {item.product.name}
         </Link>
-        <p className="text-sm text-zinc-500">{formatBeans(item.product.price)} each</p>
+        <p className="text-sm text-zinc-500">
+          <BeansAmount amount={item.product.price} /> each
+        </p>
       </div>
       {/* On mobile this row has too many fixed-width controls to share a line
           with the image + name — w-full forces it onto its own line instead
           of overlapping. From sm: up it's back to a single row, unchanged. */}
       <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-normal">
         <QuantitySelector quantity={item.quantity} max={item.product.stock_quantity} onChange={(q) => updateItem(item.id, q)} disabled={isMutating} size="sm" />
-        <div className="text-right font-semibold text-zinc-900 sm:w-20">{formatBeans(item.subtotal)}</div>
+        <div className="text-right font-semibold text-zinc-900 sm:w-20">
+          <BeansAmount amount={item.subtotal} />
+        </div>
         <button
           onClick={() => removeItem(item.id)}
           disabled={isMutating}

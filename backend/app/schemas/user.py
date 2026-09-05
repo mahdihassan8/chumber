@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models.user import Currency, UserRole
+from app.models.user import UserRole
 
 
 class UserRead(BaseModel):
@@ -16,7 +16,6 @@ class UserRead(BaseModel):
     role: UserRole
     is_active: bool
     balance: float
-    currency: Currency
     avatar_url: str | None
     created_at: datetime
 
@@ -46,23 +45,20 @@ class AvatarSelectRequest(BaseModel):
 
 
 class AddBalanceRequest(BaseModel):
-    # allow_inf_nan=False matters: JSON technically allows number literals
-    # like 1e400 that overflow a double to +inf, and Python's json module
-    # accepts the literal tokens Infinity/NaN outright. Without this, either
-    # would sail past `gt=0` (inf > 0 is True) and get added straight onto a
-    # user's balance. le=1_000_000 is a sane per-recharge cap for this app,
-    # well under what the DB column (NUMERIC(12,2)) can actually hold, so a
-    # fat-fingered or malicious huge amount fails clean validation instead of
-    # a DB-level numeric overflow error. multiple_of=0.25 is safe here (unlike
-    # e.g. 0.1) since quarter increments are exactly representable in binary
-    # floating point, so there's no precision-tolerance edge case to worry
-    # about.
-    amount: float = Field(gt=0, le=1_000_000, allow_inf_nan=False, multiple_of=0.25)
+    # Amount in IQD. allow_inf_nan=False matters: JSON technically allows
+    # number literals like 1e400 that overflow a double to +inf, and Python's
+    # json module accepts the literal tokens Infinity/NaN outright. Without
+    # this, either would sail past `gt=0` (inf > 0 is True) and get added
+    # straight onto a user's balance. le=10_000_000 is a sane per-recharge cap
+    # for this app, well under what the DB column (NUMERIC(12,2)) can actually
+    # hold, so a fat-fingered or malicious huge amount fails clean validation
+    # instead of a DB-level numeric overflow error. multiple_of=250 keeps every
+    # balance change a whole number of Beans (250 IQD = 1 Bean), so a customer
+    # never sees their balance rounded to something they weren't given; 250 is
+    # an integer and therefore exactly representable in binary floating point,
+    # so there's no precision-tolerance edge case to worry about.
+    amount: float = Field(gt=0, le=10_000_000, allow_inf_nan=False, multiple_of=250)
     description: str | None = Field(default=None, max_length=500)
-
-
-class SetCurrencyRequest(BaseModel):
-    currency: Currency
 
 
 class ChangePasswordRequest(BaseModel):

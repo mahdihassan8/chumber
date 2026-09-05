@@ -103,6 +103,36 @@ def test_absurdly_large_price_rejected(client: TestClient, admin: User) -> None:
     assert response.status_code == 422
 
 
+def test_admin_can_create_free_product(client: TestClient, admin: User) -> None:
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.post("/api/products", json={"name": "Free Sample", "price": 0, "stock_quantity": 5}, headers=headers)
+    assert response.status_code == 201
+    body = response.json()
+    assert body["price"] == 0
+    assert body["is_free"] is True
+
+
+def test_negative_price_still_rejected(client: TestClient, admin: User) -> None:
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.post("/api/products", json={"name": "Bad Price", "price": -1, "stock_quantity": 1}, headers=headers)
+    assert response.status_code == 422
+
+
+def test_paid_product_is_not_marked_free(client: TestClient, db: Session, admin: User) -> None:
+    product = make_product(db, price=5)
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.get(f"/api/products/{product.id}", headers=headers)
+    assert response.json()["is_free"] is False
+
+
+def test_admin_can_edit_existing_product_to_be_free(client: TestClient, db: Session, admin: User) -> None:
+    product = make_product(db, price=5)
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.patch(f"/api/products/{product.id}", json={"price": 0}, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["is_free"] is True
+
+
 def test_product_list_sorted_by_sales_best_seller_first(client: TestClient, db: Session, admin: User) -> None:
     buyer = make_user(db, username="sort_buyer", password="password123", role=UserRole.CUSTOMER, balance=100_000)
     buyer_headers = auth_headers(client, buyer.username, "password123")

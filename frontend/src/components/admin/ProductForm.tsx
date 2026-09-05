@@ -7,6 +7,7 @@ import { TextField } from "@/components/common/TextField";
 import { Button } from "@/components/common/Button";
 import { ProductImage } from "@/components/product/ProductImage";
 import { ApiRequestError } from "@/api/client";
+import { toBeans } from "@/utils/assets";
 
 interface ProductFormProps {
   existingProduct?: Product;
@@ -24,6 +25,7 @@ export function ProductForm({ existingProduct }: ProductFormProps) {
   const [stock, setStock] = useState(existingProduct ? String(existingProduct.stock_quantity) : "");
   const [imageUrl, setImageUrl] = useState<string | null>(existingProduct?.image_url ?? null);
   const [isActive, setIsActive] = useState(existingProduct?.is_active ?? true);
+  const [isFree, setIsFree] = useState(existingProduct?.is_free ?? false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -48,10 +50,10 @@ export function ProductForm({ existingProduct }: ProductFormProps) {
     e.preventDefault();
     setError(null);
 
-    const priceNum = Number(price);
+    const priceNum = isFree ? 0 : Number(price);
     const stockNum = Number(stock);
     if (!name.trim()) return setError("Product name is required");
-    if (!priceNum || priceNum <= 0) return setError("Price must be greater than 0");
+    if (!isFree && (!priceNum || priceNum <= 0)) return setError("Price must be greater than 0, or mark this product as Free");
     if (!Number.isInteger(stockNum) || stockNum < 0) return setError("Stock quantity must be a non-negative whole number");
 
     setIsSubmitting(true);
@@ -107,13 +109,29 @@ export function ProductForm({ existingProduct }: ProductFormProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <TextField label="Price (USD)" name="price" type="number" min="0.01" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} required />
+        <TextField
+          label="Price (IQD)"
+          name="price"
+          type="number"
+          min="0"
+          step="250"
+          value={isFree ? "0" : price}
+          onChange={(e) => setPrice(e.target.value)}
+          required={!isFree}
+          disabled={isFree}
+          hint={isFree ? "Free — customers pay nothing" : Number(price) > 0 ? `= ${toBeans(Number(price)).toLocaleString()} Beans for customers` : "250 IQD = 1 Bean"}
+        />
         <TextField label="Stock quantity" name="stock_quantity" type="number" min="0" step="1" value={stock} onChange={(e) => setStock(e.target.value)} required />
       </div>
 
       <label className="flex items-center gap-2.5 text-sm font-medium text-zinc-700">
         <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-zinc-300 text-brand-600 focus:ring-brand-500" />
         Listed as active
+      </label>
+
+      <label className="flex items-center gap-2.5 text-sm font-medium text-zinc-700">
+        <input type="checkbox" checked={isFree} onChange={(e) => setIsFree(e.target.checked)} className="h-4 w-4 rounded border-zinc-300 text-brand-600 focus:ring-brand-500" />
+        Free product (price 0 IQD — customers claim it at no charge, excluded from giveaways)
       </label>
 
       {error && (

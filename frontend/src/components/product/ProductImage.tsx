@@ -1,12 +1,18 @@
 import { resolveAssetUrl } from "@/utils/assets";
 
+/** Renders a product image inside the fixed-size box the caller supplies.
+ *
+ * object-contain at every breakpoint: uploaded images come in whatever aspect
+ * ratio the admin had (the current ones are wide 1408x768 canvases with the
+ * product in the middle), so cropping to fill would cut the product's sides
+ * off and, in the larger boxes, scale it past its native size until it looked
+ * soft. Contain keeps the whole product visible, never stretches it, and means
+ * the image is only ever scaled down. The neutral plate fills whatever
+ * letterbox space is left over when the ratios don't match. */
 export function ProductImage({ src, alt, className = "" }: { src: string | null; alt: string; className?: string }) {
   const resolved = resolveAssetUrl(src);
   if (resolved) {
-    // object-contain on mobile so the image is never cropped to fill its
-    // box; object-cover from sm: up keeps the existing desktop look, where
-    // the fixed-size boxes were already tuned for it.
-    return <img src={resolved} alt={alt} className={`object-contain object-center sm:object-cover ${className}`} loading="lazy" />;
+    return <img src={resolved} alt={alt} className={`bg-zinc-50 object-contain object-center p-1 ${className}`} loading="lazy" />;
   }
   return (
     <div className={`flex items-center justify-center bg-gradient-to-br from-brand-50 to-zinc-100 ${className}`}>

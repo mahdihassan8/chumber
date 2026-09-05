@@ -10,9 +10,9 @@ def test_customer_can_view_own_balance(client: TestClient, customer: User) -> No
     response = client.get("/api/balance", headers=headers)
     assert response.status_code == 200
     body = response.json()
-    assert body["balance"] == 100.0
+    assert body["balance"] == 100_000.0
     # The customer fixture's starting balance is a plain DB seed, not a
-    # ledger transaction, so received/spent are 0 even though balance is 100.
+    # ledger transaction, so received/spent are 0 even though balance is set.
     assert body["total_received"] == 0.0
     assert body["total_spent"] == 0.0
 
@@ -20,12 +20,12 @@ def test_customer_can_view_own_balance(client: TestClient, customer: User) -> No
 def test_balance_breakdown_reflects_received_and_spent(client: TestClient, db: Session, customer: User, admin: User) -> None:
     from tests.conftest import make_product
 
-    product = make_product(db, price=30, stock=10)
+    product = make_product(db, price=30_000, stock=10)
     admin_headers = auth_headers(client, admin.username, "password123")
     customer_headers = auth_headers(client, customer.username, "password123")
 
-    client.post(f"/api/users/{customer.id}/balance", json={"amount": 50, "description": "First top-up"}, headers=admin_headers)
-    client.post(f"/api/users/{customer.id}/balance", json={"amount": 20, "description": "Second top-up"}, headers=admin_headers)
+    client.post(f"/api/users/{customer.id}/balance", json={"amount": 50_000, "description": "First top-up"}, headers=admin_headers)
+    client.post(f"/api/users/{customer.id}/balance", json={"amount": 20_000, "description": "Second top-up"}, headers=admin_headers)
 
     client.post("/api/cart/items", json={"product_id": str(product.id), "quantity": 1}, headers=customer_headers)
     client.post("/api/orders/checkout", headers=customer_headers)
@@ -33,10 +33,10 @@ def test_balance_breakdown_reflects_received_and_spent(client: TestClient, db: S
     response = client.get(f"/api/users/{customer.id}/balance", headers=admin_headers)
     assert response.status_code == 200
     body = response.json()
-    # balance: 100 (seed) + 50 + 20 - 30 = 140
-    assert body["balance"] == 140.0
-    assert body["total_received"] == 70.0  # 50 + 20 (seed balance isn't a ledger transaction)
-    assert body["total_spent"] == 30.0
+    # balance: 100,000 (seed) + 50,000 + 20,000 - 30,000 = 140,000 IQD
+    assert body["balance"] == 140_000.0
+    assert body["total_received"] == 70_000.0  # 50,000 + 20,000 (seed balance isn't a ledger transaction)
+    assert body["total_spent"] == 30_000.0
     assert len(body["transactions"]) == 3
     # the recharging admin is identified by username, not just a raw id
     recharge_txns = [t for t in body["transactions"] if t["transaction_type"] == "admin_recharge"]
@@ -59,7 +59,7 @@ def test_balance_transactions_ordered_newest_first(client: TestClient, db: Sessi
         db.add(
             BalanceTransaction(
                 user_id=customer.id,
-                amount=10,
+                amount=10_000,
                 transaction_type=TransactionType.ADJUSTMENT,
                 description=label,
                 created_at=base + timedelta(minutes=i),
@@ -76,17 +76,17 @@ def test_balance_transactions_ordered_newest_first(client: TestClient, db: Sessi
 
 def test_admin_can_add_balance_to_customer(client: TestClient, db: Session, customer: User, admin: User) -> None:
     headers = auth_headers(client, admin.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 50, "description": "Top up"}, headers=headers)
+    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 50_000, "description": "Top up"}, headers=headers)
     assert response.status_code == 200
-    assert response.json()["balance"] == 150.0
+    assert response.json()["balance"] == 150_000.0
 
     db.refresh(customer)
-    assert float(customer.balance) == 150.0
+    assert float(customer.balance) == 150_000.0
 
 
 def test_customer_cannot_add_own_balance(client: TestClient, customer: User) -> None:
     headers = auth_headers(client, customer.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 50}, headers=headers)
+    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 50_000}, headers=headers)
     assert response.status_code == 403
 
 
@@ -96,13 +96,13 @@ def test_customer_cannot_add_balance_to_another_user(client: TestClient, db: Ses
 
     other = make_user(db, username="othercust", password="password123", role=UserRole.CUSTOMER)
     headers = auth_headers(client, customer.username, "password123")
-    response = client.post(f"/api/users/{other.id}/balance", json={"amount": 999}, headers=headers)
+    response = client.post(f"/api/users/{other.id}/balance", json={"amount": 999_000}, headers=headers)
     assert response.status_code == 403
 
 
 def test_negative_amount_rejected(client: TestClient, customer: User, admin: User) -> None:
     headers = auth_headers(client, admin.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": -10}, headers=headers)
+    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": -10_000}, headers=headers)
     assert response.status_code == 422
 
 
@@ -124,7 +124,7 @@ def test_infinite_amount_rejected(client: TestClient, db: Session, customer: Use
     assert response.status_code == 422
 
     db.refresh(customer)
-    assert float(customer.balance) == 100.0  # untouched
+    assert float(customer.balance) == 100_000.0  # untouched
 
 
 def test_nan_amount_rejected(client: TestClient, db: Session, customer: User, admin: User) -> None:
@@ -135,7 +135,7 @@ def test_nan_amount_rejected(client: TestClient, db: Session, customer: User, ad
     assert response.status_code == 422
 
     db.refresh(customer)
-    assert float(customer.balance) == 100.0
+    assert float(customer.balance) == 100_000.0
 
 
 def test_overflowing_amount_rejected(client: TestClient, db: Session, customer: User, admin: User) -> None:
@@ -148,7 +148,7 @@ def test_overflowing_amount_rejected(client: TestClient, db: Session, customer: 
     assert response.status_code == 422
 
     db.refresh(customer)
-    assert float(customer.balance) == 100.0
+    assert float(customer.balance) == 100_000.0
 
 
 def test_absurdly_large_but_finite_amount_rejected(client: TestClient, customer: User, admin: User) -> None:
@@ -160,54 +160,54 @@ def test_absurdly_large_but_finite_amount_rejected(client: TestClient, customer:
 def test_description_too_long_rejected(client: TestClient, customer: User, admin: User) -> None:
     headers = auth_headers(client, admin.username, "password123")
     response = client.post(
-        f"/api/users/{customer.id}/balance", json={"amount": 10, "description": "x" * 501}, headers=headers
+        f"/api/users/{customer.id}/balance", json={"amount": 10_000, "description": "x" * 501}, headers=headers
     )
     assert response.status_code == 422
 
 
 def test_admin_can_subtract_balance_from_customer(client: TestClient, db: Session, customer: User, admin: User) -> None:
     headers = auth_headers(client, admin.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": 30, "description": "Correction"}, headers=headers)
+    response = client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": 30_000, "description": "Correction"}, headers=headers)
     assert response.status_code == 200
     body = response.json()
-    assert body["balance"] == 70.0
-    assert body["total_spent"] == 30.0
+    assert body["balance"] == 70_000.0
+    assert body["total_spent"] == 30_000.0
 
     db.refresh(customer)
-    assert float(customer.balance) == 70.0
+    assert float(customer.balance) == 70_000.0
 
 
 def test_subtract_creates_adjustment_transaction(client: TestClient, customer: User, admin: User) -> None:
     headers = auth_headers(client, admin.username, "password123")
-    client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": 15, "description": "Penalty"}, headers=headers)
+    client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": 15_000, "description": "Penalty"}, headers=headers)
 
     response = client.get(f"/api/users/{customer.id}/balance", headers=headers)
     txn = response.json()["transactions"][0]
     assert txn["transaction_type"] == "adjustment"
-    assert txn["amount"] == -15.0
+    assert txn["amount"] == -15_000.0
     assert txn["description"] == "Penalty"
     assert txn["created_by_username"] == admin.username
 
 
 def test_cannot_subtract_more_than_current_balance(client: TestClient, db: Session, customer: User, admin: User) -> None:
     headers = auth_headers(client, admin.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": 150}, headers=headers)
+    response = client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": 150_000}, headers=headers)
     assert response.status_code == 400
 
     db.refresh(customer)
-    assert float(customer.balance) == 100.0  # untouched
+    assert float(customer.balance) == 100_000.0  # untouched
 
 
 def test_subtract_exactly_full_balance_allowed(client: TestClient, db: Session, customer: User, admin: User) -> None:
     headers = auth_headers(client, admin.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": 100}, headers=headers)
+    response = client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": 100_000}, headers=headers)
     assert response.status_code == 200
     assert response.json()["balance"] == 0.0
 
 
 def test_customer_cannot_subtract_own_balance(client: TestClient, customer: User) -> None:
     headers = auth_headers(client, customer.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": 10}, headers=headers)
+    response = client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": 10_000}, headers=headers)
     assert response.status_code == 403
 
 
@@ -215,125 +215,46 @@ def test_customer_cannot_subtract_from_another_user(client: TestClient, db: Sess
     from app.models.user import UserRole
     from tests.conftest import make_user
 
-    other = make_user(db, username="othercust2", password="password123", role=UserRole.CUSTOMER, balance=50)
+    other = make_user(db, username="othercust2", password="password123", role=UserRole.CUSTOMER, balance=50_000)
     headers = auth_headers(client, customer.username, "password123")
-    response = client.post(f"/api/users/{other.id}/balance/subtract", json={"amount": 10}, headers=headers)
+    response = client.post(f"/api/users/{other.id}/balance/subtract", json={"amount": 10_000}, headers=headers)
     assert response.status_code == 403
 
 
 def test_subtract_negative_amount_rejected(client: TestClient, customer: User, admin: User) -> None:
     headers = auth_headers(client, admin.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": -10}, headers=headers)
+    response = client.post(f"/api/users/{customer.id}/balance/subtract", json={"amount": -10_000}, headers=headers)
     assert response.status_code == 422
 
 
 def test_subtract_unknown_user_404(client: TestClient, admin: User) -> None:
     headers = auth_headers(client, admin.username, "password123")
     response = client.post(
-        "/api/users/00000000-0000-0000-0000-000000000000/balance/subtract", json={"amount": 10}, headers=headers
+        "/api/users/00000000-0000-0000-0000-000000000000/balance/subtract", json={"amount": 10_000}, headers=headers
     )
     assert response.status_code == 404
 
 
-def test_new_user_defaults_to_usd_currency(client: TestClient, customer: User, admin: User) -> None:
+def test_top_up_with_stray_currency_field_in_body_is_ignored_not_error(client: TestClient, customer: User, admin: User) -> None:
+    """A stray `currency` field in the request body is simply ignored by
+    Pydantic (extra fields aren't forbidden), not rejected — there is only
+    one currency (IQD) and it is never client-supplied."""
     headers = auth_headers(client, admin.username, "password123")
-    response = client.get(f"/api/users/{customer.id}/balance", headers=headers)
+    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 10_000, "currency": "IQD"}, headers=headers)
     assert response.status_code == 200
-    assert response.json()["currency"] == "USD"
+    assert response.json()["balance"] == 110_000.0
 
 
-def test_admin_can_switch_user_currency_to_iqd(client: TestClient, db: Session, customer: User, admin: User) -> None:
+def test_amount_not_multiple_of_250_iqd_rejected(client: TestClient, customer: User, admin: User) -> None:
+    """250 IQD = 1 Bean, so an amount that isn't a whole number of Beans is
+    rejected rather than silently rounded in the customer's display."""
     headers = auth_headers(client, admin.username, "password123")
-    response = client.patch(f"/api/users/{customer.id}/currency", json={"currency": "IQD"}, headers=headers)
-    assert response.status_code == 200
-    assert response.json()["currency"] == "IQD"
-
-    db.refresh(customer)
-    assert customer.currency.value == "IQD"
-
-
-def test_switching_currency_does_not_convert_balance(client: TestClient, db: Session, customer: User, admin: User) -> None:
-    """No exchange-rate math is ever applied — switching currency only
-    relabels the existing raw balance number."""
-    headers = auth_headers(client, admin.username, "password123")
-    response = client.patch(f"/api/users/{customer.id}/currency", json={"currency": "IQD"}, headers=headers)
-    assert response.status_code == 200
-    body = response.json()
-    assert body["balance"] == 100.0  # unchanged seed balance, just relabeled
-    assert body["currency"] == "IQD"
-
-
-def test_top_up_after_switching_to_iqd_uses_raw_amount(client: TestClient, db: Session, customer: User, admin: User) -> None:
-    headers = auth_headers(client, admin.username, "password123")
-    client.patch(f"/api/users/{customer.id}/currency", json={"currency": "IQD"}, headers=headers)
-
-    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 5000}, headers=headers)
-    assert response.status_code == 200
-    body = response.json()
-    assert body["balance"] == 5100.0  # 100 (seed) + 5000 raw, no conversion
-    assert body["currency"] == "IQD"
-
-    db.refresh(customer)
-    assert float(customer.balance) == 5100.0
-
-
-def test_transaction_currency_is_derived_from_account_not_stored_per_transaction(
-    client: TestClient, db: Session, customer: User, admin: User
-) -> None:
-    """The per-transaction currency dropdown is gone — a transaction's
-    `currency` field always mirrors its account's *current* currency (see
-    BalanceTransaction.currency), so it moves when the account is switched
-    rather than being fixed at the moment the transaction was created."""
-    headers = auth_headers(client, admin.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 25}, headers=headers)
-    assert response.status_code == 200
-    txn = response.json()["transactions"][0]
-    assert txn["currency"] == "USD"
-
-    client.patch(f"/api/users/{customer.id}/currency", json={"currency": "IQD"}, headers=headers)
-    response = client.get(f"/api/users/{customer.id}/balance", headers=headers)
-    txn = next(t for t in response.json()["transactions"] if t["id"] == txn["id"])
-    assert txn["currency"] == "IQD"  # same transaction, relabeled after the account switch
-
-
-def test_top_up_with_currency_field_in_body_is_ignored_not_error(client: TestClient, customer: User, admin: User) -> None:
-    """The old per-transaction currency dropdown is removed; a stray
-    `currency` field in the request body is simply ignored by Pydantic
-    (extra fields aren't forbidden), not rejected."""
-    headers = auth_headers(client, admin.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 10, "currency": "IQD"}, headers=headers)
-    assert response.status_code == 200
-    assert response.json()["currency"] == "USD"  # account currency unaffected by the stray field
-
-
-def test_customer_cannot_switch_own_currency(client: TestClient, customer: User) -> None:
-    headers = auth_headers(client, customer.username, "password123")
-    response = client.patch(f"/api/users/{customer.id}/currency", json={"currency": "IQD"}, headers=headers)
-    assert response.status_code == 403
-
-
-def test_invalid_currency_value_rejected(client: TestClient, customer: User, admin: User) -> None:
-    headers = auth_headers(client, admin.username, "password123")
-    response = client.patch(f"/api/users/{customer.id}/currency", json={"currency": "EUR"}, headers=headers)
+    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 10_100}, headers=headers)
     assert response.status_code == 422
 
 
-def test_switch_currency_unknown_user_404(client: TestClient, admin: User) -> None:
+def test_amount_that_is_250_iqd_increment_accepted(client: TestClient, customer: User, admin: User) -> None:
     headers = auth_headers(client, admin.username, "password123")
-    response = client.patch(
-        "/api/users/00000000-0000-0000-0000-000000000000/currency", json={"currency": "IQD"}, headers=headers
-    )
-    assert response.status_code == 404
-
-
-def test_amount_not_multiple_of_quarter_rejected(client: TestClient, customer: User, admin: User) -> None:
-    headers = auth_headers(client, admin.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 10.10}, headers=headers)
-    assert response.status_code == 422
-
-
-def test_amount_that_is_quarter_increment_accepted(client: TestClient, customer: User, admin: User) -> None:
-    headers = auth_headers(client, admin.username, "password123")
-    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 10.25}, headers=headers)
+    response = client.post(f"/api/users/{customer.id}/balance", json={"amount": 10_250}, headers=headers)
     assert response.status_code == 200
-    assert response.json()["balance"] == 110.25
+    assert response.json()["balance"] == 110_250.0

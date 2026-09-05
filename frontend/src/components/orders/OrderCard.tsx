@@ -2,20 +2,21 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Order } from "@/types";
 import { Badge } from "@/components/common/Badge";
-import { formatBeans, formatCurrency, formatDateTime } from "@/utils/assets";
+import { BeansAmount } from "@/components/common/BeansAmount";
+import { formatIQD, formatDateTime } from "@/utils/assets";
 
 interface OrderCardProps {
   order: Order;
   /** Show a clickable buyer name/username — for admin views listing orders across multiple users. */
   showBuyer?: boolean;
-  /** Admin Dashboard views (default) show USD, the source of truth. The
+  /** Admin Dashboard views (default) show IQD, the stored unit. The
    * shopper-facing Purchase History page passes "beans" instead. */
-  currency?: "usd" | "beans";
+  currency?: "iqd" | "beans";
 }
 
-export function OrderCard({ order, showBuyer = false, currency = "usd" }: OrderCardProps) {
+export function OrderCard({ order, showBuyer = false, currency = "iqd" }: OrderCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const format = currency === "beans" ? formatBeans : formatCurrency;
+  const renderAmount = (amount: number) => (currency === "beans" ? <BeansAmount amount={amount} /> : formatIQD(amount));
 
   return (
     <div className="card overflow-hidden">
@@ -43,7 +44,7 @@ export function OrderCard({ order, showBuyer = false, currency = "usd" }: OrderC
         )}
         <button onClick={() => setExpanded((v) => !v)} className="flex items-center gap-3">
           <Badge color={order.status === "completed" ? "green" : "red"}>{order.status}</Badge>
-          <span className="font-bold text-zinc-900">{format(order.total_amount)}</span>
+          <span className="font-bold text-zinc-900">{renderAmount(order.total_amount)}</span>
           <svg className={`h-4 w-4 text-zinc-400 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
           </svg>
@@ -56,7 +57,7 @@ export function OrderCard({ order, showBuyer = false, currency = "usd" }: OrderC
               <span className="text-zinc-700">
                 {item.product_name} <span className="text-zinc-400">× {item.quantity}</span>
               </span>
-              <span className="font-medium text-zinc-900">{format(item.subtotal)}</span>
+              <span className="font-medium text-zinc-900">{renderAmount(item.subtotal)}</span>
             </div>
           ))}
         </div>

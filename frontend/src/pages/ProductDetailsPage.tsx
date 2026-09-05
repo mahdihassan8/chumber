@@ -5,12 +5,13 @@ import type { Product } from "@/types";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { ProductImage } from "@/components/product/ProductImage";
 import { StockBadge } from "@/components/product/StockBadge";
+import { FreeBadge } from "@/components/product/FreeBadge";
 import { QuantitySelector } from "@/components/product/QuantitySelector";
 import { Button } from "@/components/common/Button";
 import { Skeleton } from "@/components/common/Skeleton";
 import { ErrorState } from "@/components/common/ErrorState";
+import { BeansAmount } from "@/components/common/BeansAmount";
 import { useCart } from "@/context/CartContext";
-import { formatBeans } from "@/utils/assets";
 import { ApiRequestError } from "@/api/client";
 
 export function ProductDetailsPage() {
@@ -38,7 +39,7 @@ export function ProductDetailsPage() {
       <PageContainer>
         <div className="mx-auto max-w-4xl">
           <div className="grid grid-cols-1 items-center gap-8 md:grid-cols-2">
-            <Skeleton className="aspect-square w-full rounded-xl" />
+            <Skeleton className="mx-auto aspect-[4/3] w-full max-w-[380px] rounded-xl" />
             <div className="space-y-3">
               <Skeleton className="h-8 w-2/3" />
               <Skeleton className="h-5 w-1/3" />
@@ -76,13 +77,18 @@ export function ProductDetailsPage() {
       </Link>
       <div className="mx-auto max-w-4xl">
         <div className="grid grid-cols-1 items-center gap-8 md:grid-cols-2">
-          <ProductImage src={product.image_url} alt={product.name} className="mx-auto aspect-square w-full max-w-[240px] rounded-xl sm:max-w-none" />
+          <ProductImage src={product.image_url} alt={product.name} className="mx-auto aspect-[4/3] w-full max-w-[380px] rounded-xl" />
           <div>
             <div className="mb-2 flex items-start justify-between gap-3">
               <h1 className="text-2xl font-bold text-zinc-900">{product.name}</h1>
-              <StockBadge stock={product.stock_quantity} isAvailable={product.is_available} />
+              <div className="flex shrink-0 items-center gap-1.5">
+                {product.is_free && <FreeBadge />}
+                <StockBadge stock={product.stock_quantity} isAvailable={product.is_available} />
+              </div>
             </div>
-            <p className="mb-4 text-3xl font-bold text-brand-700">{formatBeans(product.price)}</p>
+            <p className="mb-4 text-3xl font-bold text-brand-700">
+              <BeansAmount amount={product.price} />
+            </p>
             <p className="mb-6 whitespace-pre-line text-zinc-600">{product.description || "No description provided."}</p>
 
             {product.is_available ? (
@@ -94,7 +100,7 @@ export function ProductDetailsPage() {
                   disabled={isMutating}
                 />
                 <Button onClick={handleAdd} isLoading={isMutating} className="sm:flex-1">
-                  Add to cart — {formatBeans(product.price * quantity)}
+                  Add to cart — <BeansAmount amount={product.price * quantity} />
                 </Button>
               </div>
             ) : (

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
 from app.models.cart import Cart
-from app.models.user import Currency, User
+from app.models.user import User
 from app.repositories.cart_repository import CartRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import ChangePasswordRequest, UserCreate, UserUpdateByAdmin, UserUpdateProfile
@@ -98,13 +98,3 @@ def admin_reset_password(db: Session, user: User, new_password: str) -> None:
     user.hashed_password = hash_password(new_password)
     user.token_version += 1
     db.commit()
-
-
-def set_currency(db: Session, user: User, currency: Currency) -> User:
-    """Relabels the account's balance/ledger currency — never rescales
-    `user.balance` or any past transaction amount, per the no-conversion
-    rule (see User.currency)."""
-    user.currency = currency
-    db.commit()
-    db.refresh(user)
-    return user

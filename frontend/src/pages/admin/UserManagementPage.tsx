@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ErrorState } from "@/components/common/ErrorState";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { formatByCurrency, formatDate } from "@/utils/assets";
+import { formatIQD, formatDate } from "@/utils/assets";
 import { ApiRequestError } from "@/api/client";
 
 export function UserManagementPage() {
@@ -83,7 +83,7 @@ export function UserManagementPage() {
     },
     { key: "email", header: "Email", render: (u) => <span className="text-zinc-600">{u.email}</span> },
     { key: "role", header: "Role", render: (u) => <Badge color={u.role === "admin" ? "blue" : "zinc"}>{u.role}</Badge> },
-    { key: "balance", header: "Balance", render: (u) => <span className="font-medium">{formatByCurrency(u.balance, u.currency)}</span> },
+    { key: "balance", header: "Balance", render: (u) => <span className="font-medium">{formatIQD(u.balance)}</span> },
     { key: "status", header: "Status", render: (u) => <Badge color={u.is_active ? "green" : "red"}>{u.is_active ? "Active" : "Inactive"}</Badge> },
     { key: "joined", header: "Joined", render: (u) => <span className="text-zinc-500">{formatDate(u.created_at)}</span> },
     {

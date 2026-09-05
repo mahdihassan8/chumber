@@ -19,8 +19,8 @@ export function AdminLayout() {
         <div className="flex items-center gap-1.5">
           <h1 className="text-2xl font-bold text-zinc-900">Admin Dashboard</h1>
           <InfoPopover label="Currency conversion info" title="Currency & Balance Conversion">
-            <p className="text-sm font-medium text-zinc-900">1000 IQD = 1 USD = 4 Beans</p>
-            <p className="text-xs text-zinc-500">All balance conversions in the system use this fixed rate.</p>
+            <p className="text-sm font-medium text-zinc-900">250 IQD = 1 Bean · 1,000 IQD = 4 Beans</p>
+            <p className="text-xs text-zinc-500">The Admin Dashboard works in IQD; customers see Beans. All conversions use this fixed rate.</p>
           </InfoPopover>
         </div>
         <p className="text-sm text-zinc-500">Manage users, products, orders and restocking</p>

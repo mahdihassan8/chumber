@@ -71,8 +71,8 @@ def test_concurrent_recharge_and_checkout_do_not_lose_an_update() -> None:
     be exactly 100 + 50 - 30 = 120, never 150 (recharge clobbering checkout's
     deduction) or 70 (checkout clobbering the recharge)."""
     setup_db = TestSessionLocal()
-    user = _make_user(setup_db, balance=100)
-    product = Product(name="Race Product", description="", price=30, stock_quantity=5, is_active=True)
+    user = _make_user(setup_db, balance=100_000)
+    product = Product(name="Race Product", description="", price=30_000, stock_quantity=5, is_active=True)
     setup_db.add(product)
     setup_db.commit()
     setup_db.refresh(product)
@@ -101,7 +101,7 @@ def test_concurrent_recharge_and_checkout_do_not_lose_an_update() -> None:
             u = db.get(User, user_id)
             barrier.wait(timeout=5)
             time.sleep(0.05)  # let checkout acquire its lock first, so recharge queues behind it
-            add_admin_recharge(db, user=u, admin_id=user_id, amount=50, description="race test recharge")
+            add_admin_recharge(db, user=u, admin_id=user_id, amount=50_000, description="race test recharge")
         except Exception as exc:  # noqa: BLE001
             errors.append(exc)
         finally:
@@ -118,11 +118,11 @@ def test_concurrent_recharge_and_checkout_do_not_lose_an_update() -> None:
         assert not errors, f"unexpected errors: {errors}"
         verify_db = TestSessionLocal()
         final_user = verify_db.get(User, user_id)
-        assert float(final_user.balance) == 120.0, f"expected 120.0 (lost-update bug would give 150 or 70), got {final_user.balance}"
+        assert float(final_user.balance) == 120_000.0, f"expected 120000.0 (lost-update bug would give 150000 or 70000), got {final_user.balance}"
 
         # The ledger must independently reconcile to the same number.
         total = sum(float(t.amount) for t in verify_db.query(BalanceTransaction).filter(BalanceTransaction.user_id == user_id).all())
-        assert round(100 + total, 2) == 120.0
+        assert round(100_000 + total, 2) == 120_000.0
         verify_db.close()
     finally:
         _cleanup(user_id, product_id)
@@ -132,7 +132,7 @@ def test_concurrent_recharges_do_not_lose_an_update() -> None:
     """Two admin recharges of +$20 each, fired concurrently, must both land:
     final balance must be exactly 140, never 120 (one clobbering the other)."""
     setup_db = TestSessionLocal()
-    user = _make_user(setup_db, balance=100)
+    user = _make_user(setup_db, balance=100_000)
     user_id = user.id
     setup_db.close()
 
@@ -144,7 +144,7 @@ def test_concurrent_recharges_do_not_lose_an_update() -> None:
         try:
             u = db.get(User, user_id)
             barrier.wait(timeout=5)
-            add_admin_recharge(db, user=u, admin_id=user_id, amount=20, description="race test recharge")
+            add_admin_recharge(db, user=u, admin_id=user_id, amount=20_000, description="race test recharge")
         except Exception as exc:  # noqa: BLE001
             errors.append(exc)
         finally:
@@ -161,7 +161,7 @@ def test_concurrent_recharges_do_not_lose_an_update() -> None:
         assert not errors, f"unexpected errors: {errors}"
         verify_db = TestSessionLocal()
         final_user = verify_db.get(User, user_id)
-        assert float(final_user.balance) == 140.0
+        assert float(final_user.balance) == 140_000.0
         verify_db.close()
     finally:
         _cleanup(user_id)

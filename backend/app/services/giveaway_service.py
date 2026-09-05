@@ -42,7 +42,8 @@ def _generate_for_date(db: Session, scheduled_date: date) -> Giveaway | None:
     request can ever see or return a half-written giveaway.
     """
     eligible_users = UserRepository(db).list_active_customers()
-    eligible_products = ProductRepository(db).list_active()
+    # Free (price 0) products are excluded — see list_giveaway_eligible.
+    eligible_products = ProductRepository(db).list_giveaway_eligible()
     if len(eligible_users) < 2 or not eligible_products:
         return None
 

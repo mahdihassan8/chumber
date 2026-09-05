@@ -79,15 +79,15 @@ def make_user(db: Session, *, username: str, password: str, role: UserRole = Use
 
 @pytest.fixture()
 def customer(db: Session) -> User:
-    return make_user(db, username=f"customer_{uuid.uuid4().hex[:8]}", password="password123", role=UserRole.CUSTOMER, balance=100)
+    return make_user(db, username=f"customer_{uuid.uuid4().hex[:8]}", password="password123", role=UserRole.CUSTOMER, balance=100_000)
 
 
 @pytest.fixture()
 def admin(db: Session) -> User:
-    return make_user(db, username=f"admin_{uuid.uuid4().hex[:8]}", password="password123", role=UserRole.ADMIN, balance=100)
+    return make_user(db, username=f"admin_{uuid.uuid4().hex[:8]}", password="password123", role=UserRole.ADMIN, balance=100_000)
 
 
-def make_product(db: Session, *, name: str = "Coca Cola", price: float = 2.5, stock: int = 10, is_active: bool = True) -> Product:
+def make_product(db: Session, *, name: str = "Coca Cola", price: float = 2500, stock: int = 10, is_active: bool = True) -> Product:
     product = Product(name=name, description="A refreshing drink", price=price, stock_quantity=stock, is_active=is_active)
     db.add(product)
     db.commit()

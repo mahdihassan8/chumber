@@ -8,7 +8,7 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { CartSummary } from "@/components/cart/CartSummary";
 import { ProductImage } from "@/components/product/ProductImage";
 import { Button } from "@/components/common/Button";
-import { formatBeans } from "@/utils/assets";
+import { BeansAmount } from "@/components/common/BeansAmount";
 import { ApiRequestError } from "@/api/client";
 
 export function CheckoutPage() {
@@ -52,12 +52,14 @@ export function CheckoutPage() {
         <div className="card divide-y divide-zinc-100 px-5 lg:col-span-2">
           {cart.items.map((item) => (
             <div key={item.id} className="flex items-center gap-4 py-4">
-              <ProductImage src={item.product.image_url} alt={item.product.name} className="h-11 w-11 rounded-lg sm:h-14 sm:w-14" />
+              <ProductImage src={item.product.image_url} alt={item.product.name} className="h-14 w-14 shrink-0 rounded-lg sm:h-16 sm:w-16" />
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-1 font-medium text-zinc-900">{item.product.name}</p>
                 <p className="text-sm text-zinc-500">Qty {item.quantity}</p>
               </div>
-              <span className="font-semibold text-zinc-900">{formatBeans(item.subtotal)}</span>
+              <span className="font-semibold text-zinc-900">
+                <BeansAmount amount={item.subtotal} />
+              </span>
             </div>
           ))}
         </div>

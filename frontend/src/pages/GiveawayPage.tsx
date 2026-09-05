@@ -54,7 +54,7 @@ export function GiveawayPage() {
             <ProductImage
               src={result.product_image_url}
               alt={result.product_name ?? "Prize"}
-              className="h-32 w-32 shrink-0 rounded-xl sm:h-28 sm:w-28"
+              className="h-28 w-28 shrink-0 rounded-xl"
             />
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">This week's prize</p>

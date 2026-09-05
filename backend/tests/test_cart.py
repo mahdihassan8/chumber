@@ -13,7 +13,7 @@ def test_add_to_cart(client: TestClient, db: Session, customer: User) -> None:
     body = response.json()
     assert len(body["items"]) == 1
     assert body["items"][0]["quantity"] == 2
-    assert body["total"] == 5.0
+    assert body["total"] == 5_000.0
 
 
 def test_cannot_exceed_stock(client: TestClient, db: Session, customer: User) -> None:

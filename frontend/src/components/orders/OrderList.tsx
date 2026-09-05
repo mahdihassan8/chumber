@@ -7,10 +7,10 @@ interface OrderListProps {
   orders: Order[];
   isLoading?: boolean;
   showBuyer?: boolean;
-  currency?: "usd" | "beans";
+  currency?: "iqd" | "beans";
 }
 
-export function OrderList({ orders, isLoading = false, showBuyer = false, currency = "usd" }: OrderListProps) {
+export function OrderList({ orders, isLoading = false, showBuyer = false, currency = "iqd" }: OrderListProps) {
   if (isLoading) {
     return (
       <div className="space-y-3">

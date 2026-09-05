@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { listUsers } from "@/api/users";
-import type { Currency, User } from "@/types";
+import type { User } from "@/types";
 import { UserBalanceRow } from "@/components/balance/UserBalanceRow";
 import { Skeleton } from "@/components/common/Skeleton";
 import { ErrorState, EmptyState } from "@/components/common/ErrorState";
-import { formatCurrency } from "@/utils/assets";
+import { formatIQD } from "@/utils/assets";
 import { ApiRequestError } from "@/api/client";
 
 export function BalanceManagementPage() {
@@ -24,14 +24,10 @@ export function BalanceManagementPage() {
 
   useEffect(load, []);
 
-  const handleBalanceChanged = (userId: string, newBalance: number, newCurrency: Currency) => {
-    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, balance: newBalance, currency: newCurrency } : u)));
+  const handleBalanceChanged = (userId: string, newBalance: number) => {
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, balance: newBalance } : u)));
   };
 
-  // A cross-account sum, unlike every other balance figure on this page —
-  // users can be denominated in different currencies with no conversion
-  // between them, so this raw total (shown in USD) is only a rough,
-  // currency-agnostic headline figure, not a real converted sum.
   const totalDistributed = users.reduce((sum, u) => sum + u.balance, 0);
   const filtered = users.filter((u) => {
     const q = search.trim().toLowerCase();
@@ -49,7 +45,7 @@ export function BalanceManagementPage() {
         </div>
         <div>
           <p className="text-sm text-zinc-500">Total balance across all users</p>
-          <p className="text-xl font-bold text-zinc-900">{formatCurrency(totalDistributed)}</p>
+          <p className="text-xl font-bold text-zinc-900">{formatIQD(totalDistributed)}</p>
         </div>
       </div>
 
