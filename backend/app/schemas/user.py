@@ -3,10 +3,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models.user import UserRole
+from app.models.user import Region, UserRole
 
 
 class UserRead(BaseModel):
+    # `regions` reads User.regions, a property over the membership rows.
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -15,7 +16,9 @@ class UserRead(BaseModel):
     full_name: str
     role: UserRole
     is_active: bool
-    balance: float
+    # Which regions this account may use. A wallet exists per region; there
+    # is no combined balance, so no balance field lives here any more.
+    regions: list[Region]
     avatar_url: str | None
     created_at: datetime
 
@@ -70,5 +73,21 @@ class AdminResetPasswordRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=100)
 
 
+class PermanentDeleteRequest(BaseModel):
+    """The caller must echo the target's username back. Checked server-side in
+    user_service.permanently_delete_user, so the guard holds even if the request
+    never went through the dialog."""
+
+    confirm_username: str = Field(min_length=1, max_length=50)
+
+
 class MessageResponse(BaseModel):
     message: str
+
+
+class SetUserRegionsRequest(BaseModel):
+    """Super Admin only. Replaces the account's regional access wholesale —
+    granting a region creates an empty wallet, revoking one leaves that
+    region's history untouched."""
+
+    regions: list[Region] = Field(min_length=1, max_length=2)

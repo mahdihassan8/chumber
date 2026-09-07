@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.user import Region, region_enum
 
 
 class OrderStatus(str, enum.Enum):
@@ -21,6 +22,10 @@ class Order(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus, name="order_status"), default=OrderStatus.COMPLETED, nullable=False)
+    # The region this purchase happened in. Recorded rather than derived: a
+    # dual-region buyer's order must stay in the region it was placed in,
+    # even if their memberships change later.
+    region: Mapped[Region] = mapped_column(region_enum, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship("User", back_populates="orders", foreign_keys=[user_id])

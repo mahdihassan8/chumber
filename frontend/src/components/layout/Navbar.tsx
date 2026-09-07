@@ -4,6 +4,9 @@ import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { Avatar } from "@/components/common/Avatar";
 import { formatBeans, formatIQD } from "@/utils/assets";
+import { isAdmin } from "@/utils/roles";
+import { RegionSwitcher } from "@/components/layout/RegionSwitcher";
+import { useOwnBalance } from "@/hooks/useOwnBalance";
 
 const NAV_LINKS = [
   { to: "/", label: "Marketplace", end: true },
@@ -28,6 +31,7 @@ function NavItem({ to, label, end }: { to: string; label: string; end: boolean }
 }
 
 export function Navbar() {
+  const ownBalance = useOwnBalance();
   const { user, logout } = useAuth();
   const { itemCount } = useCart();
   const navigate = useNavigate();
@@ -59,7 +63,7 @@ export function Navbar() {
             {NAV_LINKS.map((link) => (
               <NavItem key={link.to} {...link} />
             ))}
-            {user.role === "admin" && (
+            {isAdmin(user) && (
               <NavLink
                 to="/admin"
                 className={({ isActive }) =>
@@ -75,16 +79,21 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1.5 text-xs font-semibold text-zinc-800 sm:gap-1.5 sm:px-3 sm:text-sm">
-            {inAdminArea ? (
-              formatIQD(user.balance)
-            ) : (
-              <>
-                <img src="/bean-icon.png" alt="" className="h-4 w-4 shrink-0 object-contain object-center" />
-                {formatBeans(user.balance)}
-              </>
-            )}
-          </div>
+          <RegionSwitcher />
+          {/* Balances are per region, so there is nothing meaningful to show
+              while viewing "all regions" — better blank than a misleading 0. */}
+          {ownBalance !== null && (
+            <div className="flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1.5 text-xs font-semibold text-zinc-800 sm:gap-1.5 sm:px-3 sm:text-sm">
+              {inAdminArea ? (
+                formatIQD(ownBalance)
+              ) : (
+                <>
+                  <img src="/bean-icon.png" alt="" className="h-4 w-4 shrink-0 object-contain object-center" />
+                  {formatBeans(ownBalance)}
+                </>
+              )}
+            </div>
+          )}
 
           <NavLink to="/cart" className="relative rounded-lg p-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900" aria-label="Cart">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -138,7 +147,7 @@ export function Navbar() {
               <NavItem {...link} />
             </div>
           ))}
-          {user.role === "admin" && (
+          {isAdmin(user) && (
             <NavLink to="/admin" onClick={() => setMobileOpen(false)} className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100">
               Admin Dashboard
             </NavLink>

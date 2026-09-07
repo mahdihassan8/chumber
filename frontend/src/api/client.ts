@@ -24,6 +24,24 @@ export function setToken(token: string | null): void {
   }
 }
 
+const REGION_STORAGE_KEY = "chumber_region";
+
+/** The region every request operates in, sent as X-Region. The backend always
+ * re-validates it against the account's memberships, so this is a convenience
+ * for the UI, never the security boundary. "all" is accepted from a Super Admin
+ * only. */
+export function getRegion(): string | null {
+  return localStorage.getItem(REGION_STORAGE_KEY);
+}
+
+export function setRegion(region: string | null): void {
+  if (region) {
+    localStorage.setItem(REGION_STORAGE_KEY, region);
+  } else {
+    localStorage.removeItem(REGION_STORAGE_KEY);
+  }
+}
+
 let onUnauthorized: (() => void) | null = null;
 export function registerUnauthorizedHandler(handler: () => void): void {
   onUnauthorized = handler;
@@ -56,6 +74,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
+  const region = getRegion();
+  if (region) {
+    headers["X-Region"] = region;
+  }
 
   const response = await fetch(`${API_URL}${path}`, {
     method,
@@ -87,6 +109,7 @@ export const api = {
   get: <T>(path: string) => request<T>(path, { method: "GET" }),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
+  put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
   postForm: <T>(path: string, formData: FormData) => request<T>(path, { method: "POST", body: formData, isFormData: true }),
 };

@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.user import Region, region_enum
 
 
 class Product(Base):
@@ -18,6 +19,10 @@ class Product(Base):
     stock_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Nullable for the same reason as User.region: pre-existing products have
+    # no region until a Super Admin assigns one. An unassigned product is
+    # visible only to a Super Admin, never to a regional shopper or admin.
+    region: Mapped[Region | None] = mapped_column(region_enum, nullable=True, index=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

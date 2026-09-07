@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.ai import AIRequestInputType, AIRequestStatus, AIRestockRequest
 from app.models.product import Product
-from app.models.user import User
+from app.models.user import Region, User
 from app.repositories.ai_restock_repository import AIRestockRequestRepository
 from app.repositories.product_repository import ProductRepository
-from app.services.product_service import restock_product
+from app.services.product_service import get_product_or_404, restock_product
 
 GEMINI_MODEL = "gemini-3.6-flash"
 GEMINI_TIMEOUT_MS = 30_000
@@ -33,8 +33,11 @@ class _RestockAction(BaseModel):
     quantity: int
 
 
-def _find_matching_product(db: Session, product_name: str) -> Product | None:
-    products = ProductRepository(db).list_all()
+def _find_matching_product(db: Session, product_name: str, region: Region) -> Product | None:
+    # Scoped to the admin's current region — the AI assistant must never
+    # match, and therefore never restock, a product belonging to a region
+    # the admin isn't currently operating in.
+    products = ProductRepository(db).list_all(region)
     if not products:
         return None
 
@@ -57,7 +60,9 @@ def _find_matching_product(db: Session, product_name: str) -> Product | None:
     return None
 
 
-def parse_restock_message(db: Session, admin: User, message: str, input_type: AIRequestInputType) -> AIRestockRequest:
+def parse_restock_message(
+    db: Session, admin: User, message: str, input_type: AIRequestInputType, region: Region
+) -> AIRestockRequest:
     repo = AIRestockRequestRepository(db)
 
     if not settings.gemini_api_key:
@@ -118,7 +123,7 @@ def parse_restock_message(db: Session, admin: User, message: str, input_type: AI
 
     product_name = parsed.product_name.strip()
     quantity = int(parsed.quantity or 0)
-    matched_product = _find_matching_product(db, product_name) if product_name else None
+    matched_product = _find_matching_product(db, product_name, region) if product_name else None
 
     request = AIRestockRequest(
         admin_id=admin.id,
@@ -136,7 +141,7 @@ def parse_restock_message(db: Session, admin: User, message: str, input_type: AI
     return request
 
 
-def confirm_restock_request(db: Session, admin: User, request_id: uuid.UUID) -> AIRestockRequest:
+def confirm_restock_request(db: Session, admin: User, request_id: uuid.UUID, region: Region) -> AIRestockRequest:
     request = AIRestockRequestRepository(db).get_by_id(request_id)
     if request is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Restock request not found")
@@ -149,9 +154,10 @@ def confirm_restock_request(db: Session, admin: User, request_id: uuid.UUID) -> 
     if request.parsed_quantity > 100000:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quantity is unreasonably large")
 
-    product = ProductRepository(db).get_by_id(request.resolved_product_id)
-    if product is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product no longer exists")
+    # Same region check every other by-id product path uses (see
+    # product_service.get_product_or_404): a product outside the admin's
+    # current region is reported as not-found rather than restocked.
+    product = get_product_or_404(db, request.resolved_product_id, admin, region)
 
     restock_product(db, product, request.parsed_quantity)
 

@@ -1,22 +1,29 @@
 import { useEffect, useState } from "react";
 import { getGiveaway } from "@/api/giveaway";
+import { getWeeklyReward, type WeeklyReward } from "@/api/rewards";
 import type { GiveawayResult } from "@/types";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { ProductImage } from "@/components/product/ProductImage";
 import { Avatar } from "@/components/common/Avatar";
 import { Skeleton } from "@/components/common/Skeleton";
 import { ErrorState, EmptyState } from "@/components/common/ErrorState";
-import { formatDate } from "@/utils/assets";
+import { formatDate, formatIQD } from "@/utils/assets";
 import { ApiRequestError } from "@/api/client";
 
 export function GiveawayPage() {
   const [result, setResult] = useState<GiveawayResult | null>(null);
+  // Baghdad-only; the API returns available:false for everyone else, so no
+  // region check is needed here.
+  const [reward, setReward] = useState<WeeklyReward | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = () => {
     setIsLoading(true);
     setError(null);
+    getWeeklyReward()
+      .then(setReward)
+      .catch(() => setReward(null));
     getGiveaway()
       .then(setResult)
       .catch((err) => setError(err instanceof ApiRequestError ? err.message : "Could not load the giveaway"))
@@ -28,6 +35,20 @@ export function GiveawayPage() {
   return (
     <PageContainer className="max-w-2xl">
       <h1 className="mb-6 text-2xl font-bold text-zinc-900">Weekly Giveaway</h1>
+
+      {reward?.available && (
+        <div className={`card mb-6 p-5 ${reward.is_winner ? "ring-2 ring-green-500" : ""}`}>
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Baghdad Weekly Reward · Tuesday</p>
+          <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-lg font-bold text-zinc-900">
+              {reward.is_winner ? "You won! 🎉" : reward.winner_full_name}
+              {!reward.is_winner && <span className="text-zinc-400"> (@{reward.winner_username})</span>}
+            </p>
+            <p className="text-xl font-bold text-green-700">+{formatIQD(reward.amount ?? 0)}</p>
+          </div>
+          {reward.reward_date && <p className="mt-1 text-sm text-zinc-500">Drawn {formatDate(reward.reward_date)}</p>}
+        </div>
+      )}
 
       {isLoading ? (
         <Skeleton className="h-72 w-full" />

@@ -10,8 +10,11 @@ import { TransactionList } from "@/components/balance/TransactionList";
 import { Skeleton } from "@/components/common/Skeleton";
 import { Badge } from "@/components/common/Badge";
 import { useAuth } from "@/context/AuthContext";
+import { useOwnBalance } from "@/hooks/useOwnBalance";
+import { roleBadgeColor, roleLabel } from "@/utils/roles";
 
 export function ProfilePage() {
+  const ownBalance = useOwnBalance();
   const { user } = useAuth();
   const [balance, setBalance] = useState<Balance | null>(null);
 
@@ -27,7 +30,7 @@ export function ProfilePage() {
     <PageContainer className="max-w-3xl">
       <div className="mb-6 flex items-center gap-3">
         <h1 className="text-2xl font-bold text-zinc-900">Profile</h1>
-        <Badge color={user.role === "admin" ? "blue" : "zinc"}>{user.role}</Badge>
+        <Badge color={roleBadgeColor(user.role)}>{roleLabel(user.role)}</Badge>
       </div>
 
       <div className="space-y-6">
@@ -47,7 +50,7 @@ export function ProfilePage() {
         </section>
 
         <section>
-          <BalanceDisplay balance={user.balance} />
+          <BalanceDisplay balance={ownBalance ?? 0} />
         </section>
 
         <section className="card p-6">

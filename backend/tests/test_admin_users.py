@@ -22,15 +22,16 @@ def test_admin_can_create_customer(client: TestClient, admin: User) -> None:
     assert response.json()["role"] == "customer"
 
 
-def test_admin_can_create_admin(client: TestClient, admin: User) -> None:
+def test_admin_cannot_create_admin(client: TestClient, admin: User) -> None:
+    """Granting ADMIN is Super-Admin-only now — see tests/test_super_admin.py
+    for the Super Admin path that is allowed to do this."""
     headers = auth_headers(client, admin.username, "password123")
     response = client.post(
         "/api/users",
         json={"username": "newadmin", "email": "newadmin@example.com", "full_name": "New Admin", "password": "password123", "role": "admin"},
         headers=headers,
     )
-    assert response.status_code == 201
-    assert response.json()["role"] == "admin"
+    assert response.status_code == 403
 
 
 def test_customer_cannot_create_users(client: TestClient, customer: User) -> None:
@@ -53,11 +54,11 @@ def test_admin_can_deactivate_user(client: TestClient, db: Session, admin: User,
     assert login_resp.status_code == 401
 
 
-def test_admin_can_change_role(client: TestClient, admin: User, customer: User) -> None:
+def test_admin_cannot_change_role(client: TestClient, admin: User, customer: User) -> None:
+    """Promotion/demotion moved behind SUPER_ADMIN."""
     headers = auth_headers(client, admin.username, "password123")
     response = client.patch(f"/api/users/{customer.id}", json={"role": "admin"}, headers=headers)
-    assert response.status_code == 200
-    assert response.json()["role"] == "admin"
+    assert response.status_code == 403
 
 
 def test_customer_cannot_change_own_role(client: TestClient, customer: User) -> None:

@@ -3,7 +3,8 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.user import User, UserRole
+from app.models.user import Region, User, UserRole
+from app.models.user_region import UserRegion
 from app.repositories.base import BaseRepository
 
 
@@ -39,14 +40,26 @@ class UserRepository(BaseRepository[User]):
             select(User).where(User.id == user_id).with_for_update().execution_options(populate_existing=True)
         ).scalar_one()
 
-    def list_all(self) -> list[User]:
-        return self.db.query(User).order_by(User.created_at.desc()).all()
+    def _scoped(self, query, region: Region | None):  # noqa: ANN001, ANN202
+        """Region confinement for a User query. None is unrestricted (a Super
+        Admin viewing ALL). Otherwise the account must hold a membership in that
+        region — a dual-region user therefore shows up for both regions' admins,
+        which is correct: they really are a member of both.
+        """
+        if region is not None:
+            return query.join(UserRegion, UserRegion.user_id == User.id).filter(UserRegion.region == region)
+        return query
 
-    def list_active_customers(self) -> list[User]:
-        return self.db.query(User).filter(User.role == UserRole.CUSTOMER, User.is_active.is_(True)).all()
+    def list_all(self, region: Region | None = None) -> list[User]:
+        return self._scoped(self.db.query(User), region).order_by(User.created_at.desc()).all()
 
-    def count(self) -> int:
-        return self.db.query(func.count(User.id)).scalar() or 0
+    def list_active_customers(self, region: Region | None = None) -> list[User]:
+        query = self.db.query(User).filter(User.role == UserRole.CUSTOMER, User.is_active.is_(True))
+        return self._scoped(query, region).all()
 
-    def count_by_role(self, role: UserRole) -> int:
-        return self.db.query(func.count(User.id)).filter(User.role == role).scalar() or 0
+    def count(self, region: Region | None = None) -> int:
+        return self._scoped(self.db.query(func.count(User.id)), region).scalar() or 0
+
+    def count_by_role(self, role: UserRole, region: Region | None = None) -> int:
+        query = self.db.query(func.count(User.id)).filter(User.role == role)
+        return self._scoped(query, region).scalar() or 0

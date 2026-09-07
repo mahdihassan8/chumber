@@ -1,0 +1,11 @@
+[Unit]
+Description=Draw the Chumber Baghdad weekly reward every Tuesday
+
+[Timer]
+# Baghdad time; the service itself re-checks the weekday, so a mistimed fire
+# is a no-op rather than an off-day award.
+OnCalendar=Tue *-*-* 09:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

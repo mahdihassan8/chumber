@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { Spinner } from "@/components/common/Spinner";
+import { isAdmin } from "@/utils/roles";
 
 export function ProtectedRoute() {
   const { user, isLoading } = useAuth();
@@ -36,7 +37,7 @@ export function AdminRoute() {
     return <Navigate to="/login" replace />;
   }
 
-  if (user.role !== "admin") {
+  if (!isAdmin(user)) {
     return <Navigate to="/" replace />;
   }
 

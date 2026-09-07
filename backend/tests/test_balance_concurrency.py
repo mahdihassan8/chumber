@@ -17,7 +17,8 @@ from app.models.cart import Cart, CartItem
 from app.models.order import Order, OrderItem
 from app.models.product import Product
 from app.models.transaction import BalanceTransaction
-from app.models.user import User, UserRole
+from app.models.user import Region, User, UserRole
+from app.models.user_region import UserRegion
 from app.services.balance_service import add_admin_recharge
 from app.services.order_service import checkout
 from tests.conftest import TestSessionLocal
@@ -31,10 +32,11 @@ def _make_user(db, *, balance: float) -> User:
         hashed_password=hash_password("password123"),
         role=UserRole.CUSTOMER,
         is_active=True,
-        balance=balance,
     )
     db.add(user)
     db.flush()
+    # The wallet being raced on lives on the membership row now.
+    db.add(UserRegion(user_id=user.id, region=Region.NAJAF, balance=balance))
     db.add(Cart(user_id=user.id))
     db.commit()
     db.refresh(user)
@@ -56,6 +58,7 @@ def _cleanup(user_id: uuid.UUID, product_id: uuid.UUID | None = None) -> None:
         db.query(CartItem).filter(CartItem.cart_id.in_(db.query(Cart.id).filter(Cart.user_id == user_id))).delete(
             synchronize_session=False
         )
+        db.query(UserRegion).filter(UserRegion.user_id == user_id).delete(synchronize_session=False)
         db.query(Cart).filter(Cart.user_id == user_id).delete(synchronize_session=False)
         db.query(User).filter(User.id == user_id).delete(synchronize_session=False)
         if product_id is not None:
@@ -72,7 +75,7 @@ def test_concurrent_recharge_and_checkout_do_not_lose_an_update() -> None:
     deduction) or 70 (checkout clobbering the recharge)."""
     setup_db = TestSessionLocal()
     user = _make_user(setup_db, balance=100_000)
-    product = Product(name="Race Product", description="", price=30_000, stock_quantity=5, is_active=True)
+    product = Product(region=Region.NAJAF,name="Race Product", description="", price=30_000, stock_quantity=5, is_active=True)
     setup_db.add(product)
     setup_db.commit()
     setup_db.refresh(product)
@@ -89,7 +92,7 @@ def test_concurrent_recharge_and_checkout_do_not_lose_an_update() -> None:
         try:
             u = db.get(User, user_id)  # pre-load into this session's identity map, like get_current_user does
             barrier.wait(timeout=5)
-            checkout(db, u)
+            checkout(db, u, Region.NAJAF)
         except Exception as exc:  # noqa: BLE001
             errors.append(exc)
         finally:
@@ -101,7 +104,7 @@ def test_concurrent_recharge_and_checkout_do_not_lose_an_update() -> None:
             u = db.get(User, user_id)
             barrier.wait(timeout=5)
             time.sleep(0.05)  # let checkout acquire its lock first, so recharge queues behind it
-            add_admin_recharge(db, user=u, admin_id=user_id, amount=50_000, description="race test recharge")
+            add_admin_recharge(db, user=u, region=Region.NAJAF, admin_id=user_id, amount=50_000, description="race test recharge")
         except Exception as exc:  # noqa: BLE001
             errors.append(exc)
         finally:
@@ -118,7 +121,7 @@ def test_concurrent_recharge_and_checkout_do_not_lose_an_update() -> None:
         assert not errors, f"unexpected errors: {errors}"
         verify_db = TestSessionLocal()
         final_user = verify_db.get(User, user_id)
-        assert float(final_user.balance) == 120_000.0, f"expected 120000.0 (lost-update bug would give 150000 or 70000), got {final_user.balance}"
+        assert final_user.balance_in(Region.NAJAF) == 120_000.0, f"expected 120000.0 (lost-update bug would give 150000 or 70000), got {final_user.balance}"
 
         # The ledger must independently reconcile to the same number.
         total = sum(float(t.amount) for t in verify_db.query(BalanceTransaction).filter(BalanceTransaction.user_id == user_id).all())
@@ -144,7 +147,7 @@ def test_concurrent_recharges_do_not_lose_an_update() -> None:
         try:
             u = db.get(User, user_id)
             barrier.wait(timeout=5)
-            add_admin_recharge(db, user=u, admin_id=user_id, amount=20_000, description="race test recharge")
+            add_admin_recharge(db, user=u, region=Region.NAJAF, admin_id=user_id, amount=20_000, description="race test recharge")
         except Exception as exc:  # noqa: BLE001
             errors.append(exc)
         finally:
@@ -161,7 +164,7 @@ def test_concurrent_recharges_do_not_lose_an_update() -> None:
         assert not errors, f"unexpected errors: {errors}"
         verify_db = TestSessionLocal()
         final_user = verify_db.get(User, user_id)
-        assert float(final_user.balance) == 140_000.0
+        assert final_user.balance_in(Region.NAJAF) == 140_000.0
         verify_db.close()
     finally:
         _cleanup(user_id)

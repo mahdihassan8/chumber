@@ -3,6 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.user import Region
+
 
 class ProductRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -16,6 +18,7 @@ class ProductRead(BaseModel):
     is_active: bool
     is_available: bool
     is_free: bool
+    region: Region | None
     created_at: datetime
 
 

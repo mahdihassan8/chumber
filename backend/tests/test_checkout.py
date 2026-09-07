@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models.user import User, UserRole
+from app.models.user import Region, User, UserRole
 from tests.conftest import auth_headers, make_product, make_user
 
 
@@ -34,7 +34,7 @@ def test_checkout_insufficient_balance_fails_and_does_not_change_balance(client:
     assert "Insufficient balance" in response.json()["detail"]
 
     db.refresh(customer)
-    assert float(customer.balance) == 100_000.0
+    assert customer.balance_in(Region.NAJAF) == 100_000.0
 
     db.refresh(product)
     assert product.stock_quantity == 5
@@ -60,7 +60,7 @@ def test_checkout_rejects_stock_that_changed_after_adding_to_cart(client: TestCl
     assert "in stock" in response.json()["detail"]
 
     db.refresh(customer)
-    assert float(customer.balance) == 100_000.0
+    assert customer.balance_in(Region.NAJAF) == 100_000.0
 
 
 def test_checkout_creates_purchase_transaction(client: TestClient, db: Session, customer: User) -> None:

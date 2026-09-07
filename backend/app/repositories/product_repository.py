@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.product import Product
+from app.models.user import Region
 from app.repositories.base import BaseRepository
 
 
@@ -16,19 +17,27 @@ class ProductRepository(BaseRepository[Product]):
     def get_by_id(self, product_id: uuid.UUID) -> Product | None:
         return self.db.get(Product, product_id)
 
-    def list_all(self) -> list[Product]:
-        return self.db.query(Product).all()
+    def _scoped(self, region: Region | None):  # noqa: ANN202
+        """Applies the caller's region confinement to a Product query. None
+        means unrestricted (Super Admin); UNASSIGNED matches nothing."""
+        query = self.db.query(Product)
+        if region is not None:
+            return query.filter(Product.region == region)
+        return query
 
-    def list_available(self) -> list[Product]:
-        return self.db.query(Product).filter(Product.is_active.is_(True), Product.stock_quantity > 0).all()
+    def list_all(self, region: Region | None = None) -> list[Product]:
+        return self._scoped(region).all()
 
-    def list_active(self) -> list[Product]:
-        return self.db.query(Product).filter(Product.is_active.is_(True)).all()
+    def list_available(self, region: Region | None = None) -> list[Product]:
+        return self._scoped(region).filter(Product.is_active.is_(True), Product.stock_quantity > 0).all()
 
-    def list_giveaway_eligible(self) -> list[Product]:
+    def list_active(self, region: Region | None = None) -> list[Product]:
+        return self._scoped(region).filter(Product.is_active.is_(True)).all()
+
+    def list_giveaway_eligible(self, region: Region | None = None) -> list[Product]:
         """Active products excluding Free (price 0) ones — a Free item is
         already free, so it can't be offered as a giveaway prize."""
-        return self.db.query(Product).filter(Product.is_active.is_(True), Product.price > 0).all()
+        return self._scoped(region).filter(Product.is_active.is_(True), Product.price > 0).all()
 
     def get_locked_map(self, product_ids: list[uuid.UUID]) -> dict[uuid.UUID, Product]:
         """SELECT ... FOR UPDATE with populate_existing for every product in
@@ -44,13 +53,19 @@ class ProductRepository(BaseRepository[Product]):
         )
         return {p.id: p for p in rows}
 
-    def count(self) -> int:
-        return self.db.query(func.count(Product.id)).scalar() or 0
+    def _scoped_count(self, region: Region | None):  # noqa: ANN202
+        query = self.db.query(func.count(Product.id))
+        if region is not None:
+            return query.filter(Product.region == region)
+        return query
 
-    def count_available(self) -> int:
-        return self.db.query(func.count(Product.id)).filter(Product.is_active.is_(True), Product.stock_quantity > 0).scalar() or 0
+    def count(self, region: Region | None = None) -> int:
+        return self._scoped_count(region).scalar() or 0
 
-    def count_out_of_stock(self) -> int:
+    def count_available(self, region: Region | None = None) -> int:
+        return self._scoped_count(region).filter(Product.is_active.is_(True), Product.stock_quantity > 0).scalar() or 0
+
+    def count_out_of_stock(self, region: Region | None = None) -> int:
         return (
-            self.db.query(func.count(Product.id)).filter((Product.stock_quantity == 0) | (Product.is_active.is_(False))).scalar() or 0
+            self._scoped_count(region).filter((Product.stock_quantity == 0) | (Product.is_active.is_(False))).scalar() or 0
         )

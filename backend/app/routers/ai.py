@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_admin
+from app.core.regions import get_current_region
 from app.db.session import get_db
 from app.models.ai import AIRestockRequest
-from app.models.user import User
+from app.models.user import Region, User
 from app.schemas.ai import AIRestockParseRequest, AIRestockRequestRead
 from app.services.ai_service import confirm_restock_request, list_recent, parse_restock_message, reject_restock_request
 
@@ -22,14 +23,24 @@ def _serialize(request: AIRestockRequest) -> AIRestockRequestRead:
 
 
 @router.post("/restock/parse", response_model=AIRestockRequestRead)
-def parse_restock(payload: AIRestockParseRequest, admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> AIRestockRequestRead:
-    request = parse_restock_message(db, admin, payload.message, payload.input_type)
+def parse_restock(
+    payload: AIRestockParseRequest,
+    admin: User = Depends(require_admin),
+    region: Region = Depends(get_current_region),
+    db: Session = Depends(get_db),
+) -> AIRestockRequestRead:
+    request = parse_restock_message(db, admin, payload.message, payload.input_type, region)
     return _serialize(request)
 
 
 @router.post("/restock/{request_id}/confirm", response_model=AIRestockRequestRead)
-def confirm_restock(request_id: uuid.UUID, admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> AIRestockRequestRead:
-    request = confirm_restock_request(db, admin, request_id)
+def confirm_restock(
+    request_id: uuid.UUID,
+    admin: User = Depends(require_admin),
+    region: Region = Depends(get_current_region),
+    db: Session = Depends(get_db),
+) -> AIRestockRequestRead:
+    request = confirm_restock_request(db, admin, request_id, region)
     return _serialize(request)
 
 

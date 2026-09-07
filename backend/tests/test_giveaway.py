@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.giveaway import Giveaway, GiveawayWinner
-from app.models.user import User, UserRole
+from app.models.user import Region, User, UserRole
 from app.services import giveaway_service
 from tests.conftest import auth_headers, make_product, make_user
 
@@ -191,16 +191,19 @@ def test_actual_winner_sees_is_winner_true(client: TestClient, db: Session, monk
     assert {w["id"] for w in body["winners"]} == {str(w1.id), str(w2.id)}
 
 
-def test_non_winner_sees_is_winner_false(client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch, admin: User) -> None:
+def test_non_winner_sees_is_winner_false(client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
     make_user(db, username="detwin3", password="password123", role=UserRole.CUSTOMER)
     make_user(db, username="detwin4", password="password123", role=UserRole.CUSTOMER)
     make_product(db, name="Deterministic Prize 2")
     sunday = _next_occurrence(SUNDAY)
     _freeze(monkeypatch, _at(sunday, 11, 5))
 
-    # admin is structurally excluded from the eligible pool (role != CUSTOMER),
-    # so this is a guaranteed non-winner regardless of which customers were drawn.
-    headers = auth_headers(client, admin.username, "password123")
+    # A Super Admin can always view the Najaf giveaway (it's global), but is
+    # never itself eligible to win one (see test_regions.py for the
+    # eligibility rules) — a guaranteed non-winner regardless of which Najaf
+    # accounts were drawn, and distinct from being blocked from viewing at all.
+    outsider = make_user(db, username="detwin_outsider", password="password123", role=UserRole.SUPER_ADMIN, region=Region.NAJAF)
+    headers = auth_headers(client, outsider.username, "password123")
     response = client.get("/api/giveaway", headers=headers)
     assert response.json()["is_winner"] is False
 
@@ -348,3 +351,64 @@ def test_two_different_users_get_independently_correct_winner_status(
 
     assert r1.json()["is_winner"] is True
     assert r2.json()["is_winner"] is True  # both of the 2-person pool won
+
+
+# ---------------------------------------------------------------------------
+# Region privacy: this is Najaf data, so only Najaf-eligible accounts may see
+# it at all — mirrors the same guard GET /api/rewards/weekly applies to the
+# Baghdad reward (see routers/rewards.py and routers/giveaway.py).
+# ---------------------------------------------------------------------------
+
+
+def test_baghdad_only_user_cannot_see_najaf_giveaway(client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    naj_viewer = make_user(db, username="privnaj1", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
+    make_user(db, username="privnaj2", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
+    make_product(db, name="Priv Prize 1")
+    baghdadi = make_user(db, username="privbag1", password="password123", role=UserRole.CUSTOMER, region=Region.BAGHDAD)
+    sunday = _next_occurrence(SUNDAY)
+    _freeze(monkeypatch, _at(sunday, 11, 5))
+
+    # Lock in a real, revealed giveaway first, so there is genuine winner /
+    # prize data that a leak could expose.
+    generated = client.get("/api/giveaway", headers=auth_headers(client, naj_viewer.username, "password123")).json()
+    assert generated["available"] is True
+
+    response = client.get("/api/giveaway", headers=auth_headers(client, baghdadi.username, "password123"))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["winners"] == []
+    assert body["product_name"] is None
+    assert body["scheduled_date"] is None
+
+
+def test_dual_region_user_can_see_najaf_giveaway(client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    make_user(db, username="privnaj3", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
+    dual = make_user(
+        db, username="privdual1", password="password123", role=UserRole.CUSTOMER, regions=[Region.NAJAF, Region.BAGHDAD]
+    )
+    make_product(db, name="Priv Prize 2")
+    sunday = _next_occurrence(SUNDAY)
+    _freeze(monkeypatch, _at(sunday, 11, 5))
+
+    response = client.get("/api/giveaway", headers=auth_headers(client, dual.username, "password123"))
+    assert response.status_code == 200
+    assert response.json()["available"] is True
+
+
+def test_forged_region_header_cannot_unlock_najaf_giveaway(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    naj_viewer = make_user(db, username="privnaj4", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
+    make_user(db, username="privnaj5", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
+    make_product(db, name="Priv Prize 3")
+    baghdadi = make_user(db, username="privbag2", password="password123", role=UserRole.CUSTOMER, region=Region.BAGHDAD)
+    sunday = _next_occurrence(SUNDAY)
+    _freeze(monkeypatch, _at(sunday, 11, 5))
+
+    client.get("/api/giveaway", headers=auth_headers(client, naj_viewer.username, "password123"))
+
+    headers = {**auth_headers(client, baghdadi.username, "password123"), "X-Region": "najaf"}
+    response = client.get("/api/giveaway", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["available"] is False

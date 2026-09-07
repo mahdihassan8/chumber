@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.db.seed import seed_bootstrap_admin
 from app.db.session import SessionLocal
-from app.routers import admin, ai, auth, balance, cart, giveaway, orders, products, profile, users
+from app.routers import admin, ai, auth, balance, cart, giveaway, orders, products, profile, rewards, users
 
 
 @asynccontextmanager
@@ -50,6 +50,7 @@ app.include_router(profile.router)
 app.include_router(ai.router)
 app.include_router(admin.router)
 app.include_router(giveaway.router)
+app.include_router(rewards.router)
 
 
 def _json_safe(value: Any) -> Any:

@@ -1,0 +1,11 @@
+[Unit]
+Description=Chumber Baghdad weekly reward draw
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/chumber
+# Runs inside the already-configured backend container, so it picks up the same
+# database URL and secrets as the app with no separate config to keep in sync.
+ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T backend python scripts/run_weekly_reward.py

@@ -11,7 +11,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import Cart, Product, User, UserRole
+from app.models import Cart, Product, Region, User, UserRegion, UserRole
 
 test_engine = create_engine(settings.test_database_url)
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
@@ -59,7 +59,16 @@ def client(db: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
-def make_user(db: Session, *, username: str, password: str, role: UserRole = UserRole.CUSTOMER, balance: float = 0) -> User:
+def make_user(
+    db: Session,
+    *,
+    username: str,
+    password: str,
+    role: UserRole = UserRole.CUSTOMER,
+    balance: float = 0,
+    region: Region | None = Region.NAJAF,
+    regions: list[Region] | None = None,
+) -> User:
     user = User(
         username=username,
         email=f"{username}@example.com",
@@ -67,10 +76,12 @@ def make_user(db: Session, *, username: str, password: str, role: UserRole = Use
         hashed_password=hash_password(password),
         role=role,
         is_active=True,
-        balance=balance,
     )
     db.add(user)
     db.flush()
+    # One wallet per region the account belongs to; `balance` seeds the first.
+    for i, r in enumerate(regions if regions is not None else ([region] if region else [])):
+        db.add(UserRegion(user_id=user.id, region=r, balance=balance if i == 0 else 0))
     db.add(Cart(user_id=user.id))
     db.commit()
     db.refresh(user)
@@ -87,8 +98,18 @@ def admin(db: Session) -> User:
     return make_user(db, username=f"admin_{uuid.uuid4().hex[:8]}", password="password123", role=UserRole.ADMIN, balance=100_000)
 
 
-def make_product(db: Session, *, name: str = "Coca Cola", price: float = 2500, stock: int = 10, is_active: bool = True) -> Product:
-    product = Product(name=name, description="A refreshing drink", price=price, stock_quantity=stock, is_active=is_active)
+def make_product(
+    db: Session,
+    *,
+    name: str = "Coca Cola",
+    price: float = 2500,
+    stock: int = 10,
+    is_active: bool = True,
+    region: Region | None = Region.NAJAF,
+) -> Product:
+    product = Product(
+        name=name, description="A refreshing drink", price=price, stock_quantity=stock, is_active=is_active, region=region
+    )
     db.add(product)
     db.commit()
     db.refresh(product)

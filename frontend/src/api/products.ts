@@ -1,5 +1,5 @@
 import { api } from "@/api/client";
-import type { Product } from "@/types";
+import type { Product, Region } from "@/types";
 
 export interface ProductInput {
   name: string;
@@ -8,6 +8,9 @@ export interface ProductInput {
   stock_quantity: number;
   image_url?: string | null;
   is_active?: boolean;
+  /** Honoured for a Super Admin; a regional admin's products always land in
+   * their own region regardless of what is sent. */
+  region?: Region | null;
 }
 
 export function listProducts(): Promise<Product[]> {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Balance, User } from "@/types";
 import { getUserBalance, addUserBalance, subtractUserBalance } from "@/api/balance";
@@ -15,6 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { formatIQD, toBeans } from "@/utils/assets";
 import { ApiRequestError } from "@/api/client";
+import { roleBadgeColor, roleLabel } from "@/utils/roles";
 
 interface UserBalanceRowProps {
   user: User;
@@ -45,6 +46,14 @@ export function UserBalanceRow({ user, onBalanceChanged }: UserBalanceRowProps) 
       .catch((err) => setError(err instanceof ApiRequestError ? err.message : "Could not load balance details"))
       .finally(() => setIsLoading(false));
   };
+
+  // Balances are per region now, so the figure has to be fetched rather than
+  // read off the user row. Load it up front so the collapsed row still
+  // shows this region's balance.
+  useEffect(() => {
+    if (!detail) loadDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleExpanded = () => {
     const next = !expanded;
@@ -115,9 +124,9 @@ export function UserBalanceRow({ user, onBalanceChanged }: UserBalanceRowProps) 
             </Link>
             <p className="truncate text-xs text-zinc-500">@{user.username}</p>
           </div>
-          <Badge color={user.role === "admin" ? "blue" : "zinc"}>{user.role}</Badge>
+          <Badge color={roleBadgeColor(user.role)}>{roleLabel(user.role)}</Badge>
         </button>
-        <span className="font-bold text-zinc-900">{formatIQD(user.balance)}</span>
+        <span className="font-bold text-zinc-900">{detail ? formatIQD(detail.balance) : "—"}</span>
         <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => setModalMode("add")}>
           + Add balance
         </Button>

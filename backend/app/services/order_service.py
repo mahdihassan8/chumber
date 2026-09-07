@@ -3,7 +3,9 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.regions import assert_can_access
 from app.models.order import Order, OrderItem
+from app.models.user import Region
 from app.models.product import Product
 from app.models.transaction import TransactionType
 from app.models.user import User
@@ -11,11 +13,12 @@ from app.repositories.cart_repository import CartItemRepository
 from app.repositories.order_repository import OrderItemRepository, OrderRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.user_repository import UserRepository
+from app.services import balance_service
 from app.services.balance_service import record_transaction
 from app.services.cart_service import get_or_create_cart
 
 
-def checkout(db: Session, user: User) -> Order:
+def checkout(db: Session, user: User, region: Region) -> Order:
     """Validates and applies a full cart purchase atomically.
 
     Locks the user row and every product row involved (SELECT ... FOR UPDATE)
@@ -36,11 +39,19 @@ def checkout(db: Session, user: User) -> Order:
         # update bug this locking is meant to prevent. Verified empirically:
         # without populate_existing, a concurrently committed balance change is
         # invisible here even though the row lock itself is correctly acquired.
-        locked_user = UserRepository(db).get_locked(user.id)
+        # Lock this region's wallet (not the user row) — the balance being
+        # spent lives on the membership, and each region's wallet is an
+        # independent account.
+        locked_wallet = balance_service.get_locked_membership(db, user, region)
 
-        cart = get_or_create_cart(db, locked_user)
+        cart = get_or_create_cart(db, user)
         item_repo = CartItemRepository(db)
-        items = item_repo.list_by_cart(cart.id)
+        # Only this region's lines are bought and cleared. A dual-region shopper
+        # can hold lines for both regions at once; checking out in Najaf must
+        # charge and clear the Najaf lines and leave the Baghdad ones sitting in
+        # the cart, not fail because the cart contains something from elsewhere.
+        all_items = item_repo.list_by_cart(cart.id)
+        items = [i for i in all_items if i.product is not None and i.product.region == region]
         if not items:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cart is empty")
 
@@ -54,7 +65,9 @@ def checkout(db: Session, user: User) -> Order:
         line_items: list[tuple[Product, int]] = []
         for item in items:
             product = locked_products.get(item.product_id)
-            if product is None or not product.is_active:
+            # Region check inside the money path too: a cart item can only
+            # be paid for from the region it belongs to.
+            if product is None or not product.is_active or product.region != region:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Product '{item.product_id}' is no longer available")
             if item.quantity > product.stock_quantity:
                 raise HTTPException(
@@ -65,10 +78,10 @@ def checkout(db: Session, user: User) -> Order:
             line_items.append((product, item.quantity))
 
         total = round(total, 2)
-        if float(locked_user.balance) < total:
+        if float(locked_wallet.balance) < total:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Insufficient balance")
 
-        order = Order(user_id=locked_user.id, total_amount=total)
+        order = Order(user_id=user.id, region=region, total_amount=total)
         order_repo = OrderRepository(db)
         order_repo.add(order)
         db.flush()
@@ -89,14 +102,17 @@ def checkout(db: Session, user: User) -> Order:
 
         record_transaction(
             db,
-            user=locked_user,
+            user=user,
+            region=region,
             amount=-total,
             transaction_type=TransactionType.PURCHASE,
             related_order_id=order.id,
             description=f"Purchase - order {order.id}",
         )
 
-        item_repo.delete_all_by_cart(cart.id)
+        # Clear only what was just bought — the other region's lines stay.
+        for item in items:
+            item_repo.delete(item)
 
         db.commit()
         db.refresh(order)
@@ -109,9 +125,9 @@ def checkout(db: Session, user: User) -> Order:
         raise
 
 
-def list_by_user(db: Session, user_id: uuid.UUID) -> list[Order]:
-    return OrderRepository(db).list_by_user(user_id)
+def list_by_user(db: Session, user_id: uuid.UUID, region: Region | None = None) -> list[Order]:
+    return OrderRepository(db).list_by_user(user_id, region)
 
 
-def list_all(db: Session) -> list[Order]:
-    return OrderRepository(db).list_all()
+def list_all(db: Session, region: Region | None) -> list[Order]:
+    return OrderRepository(db).list_all(region)

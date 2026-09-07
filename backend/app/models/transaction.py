@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.user import Region, region_enum
 
 
 class TransactionType(str, enum.Enum):
@@ -14,6 +15,7 @@ class TransactionType(str, enum.Enum):
     PURCHASE = "purchase"
     REFUND = "refund"
     ADJUSTMENT = "adjustment"
+    REWARD = "reward"
 
 
 class BalanceTransaction(Base):
@@ -24,6 +26,9 @@ class BalanceTransaction(Base):
     # In IQD, like every other money column (see User.balance).
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     transaction_type: Mapped[TransactionType] = mapped_column(Enum(TransactionType, name="transaction_type"), nullable=False)
+    # Which regional wallet this row belongs to — a Najaf transaction must
+    # never surface in Baghdad history.
+    region: Mapped[Region] = mapped_column(region_enum, nullable=False, index=True)
     related_order_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True)
     created_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)

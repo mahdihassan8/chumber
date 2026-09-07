@@ -1,11 +1,13 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Product } from "@/types";
+import type { Product, Region } from "@/types";
 import { createProduct, updateProduct, uploadProductImage } from "@/api/products";
 import { useToast } from "@/context/ToastContext";
 import { TextField } from "@/components/common/TextField";
 import { Button } from "@/components/common/Button";
 import { ProductImage } from "@/components/product/ProductImage";
+import { useAuth } from "@/context/AuthContext";
+import { REGIONS, isSuperAdmin, regionLabel } from "@/utils/roles";
 import { ApiRequestError } from "@/api/client";
 import { toBeans } from "@/utils/assets";
 
@@ -26,6 +28,11 @@ export function ProductForm({ existingProduct }: ProductFormProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(existingProduct?.image_url ?? null);
   const [isActive, setIsActive] = useState(existingProduct?.is_active ?? true);
   const [isFree, setIsFree] = useState(existingProduct?.is_free ?? false);
+  const { user: actor } = useAuth();
+  // Only a Super Admin chooses; a regional admin's products always land in
+  // their own region, which the backend forces regardless of this field.
+  const canChooseRegion = isSuperAdmin(actor);
+  const [region, setRegion] = useState<Region | "">(existingProduct?.region ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -54,15 +61,30 @@ export function ProductForm({ existingProduct }: ProductFormProps) {
     const stockNum = Number(stock);
     if (!name.trim()) return setError("Product name is required");
     if (!isFree && (!priceNum || priceNum <= 0)) return setError("Price must be greater than 0, or mark this product as Free");
+    if (canChooseRegion && !region) return setError("Choose which region this product belongs to");
     if (!Number.isInteger(stockNum) || stockNum < 0) return setError("Stock quantity must be a non-negative whole number");
 
     setIsSubmitting(true);
     try {
       if (isEdit && existingProduct) {
-        await updateProduct(existingProduct.id, { name, description, price: priceNum, stock_quantity: stockNum, is_active: isActive });
+        await updateProduct(existingProduct.id, {
+          name,
+          description,
+          price: priceNum,
+          stock_quantity: stockNum,
+          is_active: isActive,
+          ...(canChooseRegion && region ? { region } : {}),
+        });
         showToast("Product updated", "success");
       } else {
-        const created = await createProduct({ name, description, price: priceNum, stock_quantity: stockNum, is_active: isActive });
+        const created = await createProduct({
+          name,
+          description,
+          price: priceNum,
+          stock_quantity: stockNum,
+          is_active: isActive,
+          ...(canChooseRegion && region ? { region } : {}),
+        });
         showToast("Product created", "success");
         navigate(`/admin/products/${created.id}/edit`);
         return;
@@ -123,6 +145,29 @@ export function ProductForm({ existingProduct }: ProductFormProps) {
         />
         <TextField label="Stock quantity" name="stock_quantity" type="number" min="0" step="1" value={stock} onChange={(e) => setStock(e.target.value)} required />
       </div>
+
+      {canChooseRegion && (
+        <div>
+          <label htmlFor="region" className="label">
+            Region
+          </label>
+          <select
+            id="region"
+            value={region}
+            onChange={(e) => setRegion(e.target.value as Region)}
+            className="input"
+          >
+            <option value="" disabled>
+              Select a region...
+            </option>
+            {REGIONS.map((r) => (
+              <option key={r} value={r}>
+                {regionLabel(r)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <label className="flex items-center gap-2.5 text-sm font-medium text-zinc-700">
         <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-zinc-300 text-brand-600 focus:ring-brand-500" />

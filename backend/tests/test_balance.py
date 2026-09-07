@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models.user import User
+from app.models.user import Region, User
 from tests.conftest import auth_headers
 
 
@@ -58,6 +58,7 @@ def test_balance_transactions_ordered_newest_first(client: TestClient, db: Sessi
     for i, label in enumerate(["oldest", "middle", "newest"]):
         db.add(
             BalanceTransaction(
+                region=Region.NAJAF,
                 user_id=customer.id,
                 amount=10_000,
                 transaction_type=TransactionType.ADJUSTMENT,
@@ -81,7 +82,7 @@ def test_admin_can_add_balance_to_customer(client: TestClient, db: Session, cust
     assert response.json()["balance"] == 150_000.0
 
     db.refresh(customer)
-    assert float(customer.balance) == 150_000.0
+    assert customer.balance_in(Region.NAJAF) == 150_000.0
 
 
 def test_customer_cannot_add_own_balance(client: TestClient, customer: User) -> None:
@@ -124,7 +125,7 @@ def test_infinite_amount_rejected(client: TestClient, db: Session, customer: Use
     assert response.status_code == 422
 
     db.refresh(customer)
-    assert float(customer.balance) == 100_000.0  # untouched
+    assert customer.balance_in(Region.NAJAF) == 100_000.0  # untouched
 
 
 def test_nan_amount_rejected(client: TestClient, db: Session, customer: User, admin: User) -> None:
@@ -135,7 +136,7 @@ def test_nan_amount_rejected(client: TestClient, db: Session, customer: User, ad
     assert response.status_code == 422
 
     db.refresh(customer)
-    assert float(customer.balance) == 100_000.0
+    assert customer.balance_in(Region.NAJAF) == 100_000.0
 
 
 def test_overflowing_amount_rejected(client: TestClient, db: Session, customer: User, admin: User) -> None:
@@ -148,7 +149,7 @@ def test_overflowing_amount_rejected(client: TestClient, db: Session, customer: 
     assert response.status_code == 422
 
     db.refresh(customer)
-    assert float(customer.balance) == 100_000.0
+    assert customer.balance_in(Region.NAJAF) == 100_000.0
 
 
 def test_absurdly_large_but_finite_amount_rejected(client: TestClient, customer: User, admin: User) -> None:
@@ -174,7 +175,7 @@ def test_admin_can_subtract_balance_from_customer(client: TestClient, db: Sessio
     assert body["total_spent"] == 30_000.0
 
     db.refresh(customer)
-    assert float(customer.balance) == 70_000.0
+    assert customer.balance_in(Region.NAJAF) == 70_000.0
 
 
 def test_subtract_creates_adjustment_transaction(client: TestClient, customer: User, admin: User) -> None:
@@ -195,7 +196,7 @@ def test_cannot_subtract_more_than_current_balance(client: TestClient, db: Sessi
     assert response.status_code == 400
 
     db.refresh(customer)
-    assert float(customer.balance) == 100_000.0  # untouched
+    assert customer.balance_in(Region.NAJAF) == 100_000.0  # untouched
 
 
 def test_subtract_exactly_full_balance_allowed(client: TestClient, db: Session, customer: User, admin: User) -> None:

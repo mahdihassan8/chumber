@@ -7,7 +7,11 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg2://chumber:chumber@localhost:5432/chumber"
     test_database_url: str = "postgresql+psycopg2://chumber:chumber@localhost:5432/chumber_test"
 
-    jwt_secret_key: str = "dev-secret-key-change-me"
+    # No default on purpose: a signing key is exactly the kind of thing that
+    # must never silently fall back to a value baked into the source tree —
+    # pydantic-settings raises at startup if it isn't supplied via the
+    # environment/.env, which is the fail-safe behavior we want here.
+    jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     # 7-day sessions: users stay logged in for a week without re-entering
     # credentials. Since a stolen token would then stay valid for that whole
@@ -20,7 +24,8 @@ class Settings(BaseSettings):
 
     bootstrap_admin_username: str = "mooane"
     bootstrap_admin_email: str = "admin@stchumber.com"
-    bootstrap_admin_password: str = "Mm20051965"
+    # Same reasoning as jwt_secret_key above: no hardcoded fallback password.
+    bootstrap_admin_password: str
 
     cors_origins: str = "http://localhost:5173"
 

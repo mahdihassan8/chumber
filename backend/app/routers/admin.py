@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_admin
+from app.core.regions import get_admin_scope
+from app.models.user import Region
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.admin import OverviewStats
@@ -12,11 +14,15 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
 @router.get("/overview", response_model=OverviewStats)
-def get_overview(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> OverviewStats:
-    return admin_service.get_overview(db)
+def get_overview(
+    _: User = Depends(require_admin), scope: Region | None = Depends(get_admin_scope), db: Session = Depends(get_db)
+) -> OverviewStats:
+    return admin_service.get_overview(db, scope)
 
 
 @router.get("/orders", response_model=list[OrderRead])
-def list_all_orders(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> list[OrderRead]:
-    orders = order_service.list_all(db)
+def list_all_orders(
+    _: User = Depends(require_admin), scope: Region | None = Depends(get_admin_scope), db: Session = Depends(get_db)
+) -> list[OrderRead]:
+    orders = order_service.list_all(db, scope)
     return [OrderRead.model_validate(o) for o in orders]

@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.models.transaction import TransactionType
+from app.models.user import Region
 
 
 class BalanceTransactionRead(BaseModel):
@@ -13,6 +14,7 @@ class BalanceTransactionRead(BaseModel):
     user_id: uuid.UUID
     # IQD, like every money field in the API.
     amount: float
+    region: Region
     transaction_type: TransactionType
     related_order_id: uuid.UUID | None
     created_by_id: uuid.UUID | None
@@ -22,6 +24,8 @@ class BalanceTransactionRead(BaseModel):
 
 
 class BalanceRead(BaseModel):
+    # Always one region's wallet — never a sum across regions.
+    region: Region
     balance: float
     total_received: float
     total_spent: float

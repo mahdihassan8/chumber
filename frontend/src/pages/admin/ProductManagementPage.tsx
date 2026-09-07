@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { ErrorState } from "@/components/common/ErrorState";
 import { useToast } from "@/context/ToastContext";
 import { formatIQD } from "@/utils/assets";
+import { regionBadgeColor, regionLabel } from "@/utils/roles";
 import { ApiRequestError } from "@/api/client";
 
 export function ProductManagementPage() {
@@ -61,6 +62,7 @@ export function ProductManagementPage() {
       ),
     },
     { key: "price", header: "Price", render: (p) => (p.is_free ? <FreeBadge /> : formatIQD(p.price)) },
+    { key: "region", header: "Region", render: (p) => <Badge color={regionBadgeColor(p.region)}>{regionLabel(p.region)}</Badge> },
     { key: "stock", header: "Stock", render: (p) => <span className="tabular-nums">{p.stock_quantity}</span> },
     { key: "availability", header: "Availability", render: (p) => <StockBadge stock={p.stock_quantity} isAvailable={p.is_available} /> },
     { key: "status", header: "Listed", render: (p) => <Badge color={p.is_active ? "green" : "zinc"}>{p.is_active ? "Active" : "Hidden"}</Badge> },

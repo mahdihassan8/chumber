@@ -1,4 +1,11 @@
-export type UserRole = "customer" | "admin";
+/** Privilege hierarchy: customer < admin < super_admin. super_admin is granted
+ * only by the backend bootstrap seed and can never be assigned through the UI. */
+export type UserRole = "customer" | "admin" | "super_admin";
+
+/** The two isolated halves of the system. null means "not assigned yet" —
+ * only a Super Admin can set it, and an unassigned account sees no
+ * region-scoped data. */
+export type Region = "baghdad" | "najaf";
 
 export interface User {
   id: string;
@@ -7,6 +14,9 @@ export interface User {
   full_name: string;
   role: UserRole;
   is_active: boolean;
+  /** Regions this account may use — one, or two when a Super Admin grants
+   * both. Each has its own independent wallet; there is no combined balance. */
+  regions: Region[];
   /** IQD — the only money unit the API speaks. Shopper-facing UI converts to
    * Beans for display (250 IQD = 1 Bean); the Admin Dashboard shows raw IQD. */
   balance: number;
@@ -26,6 +36,7 @@ export interface Product {
   /** True when price is exactly 0 — a Free product (see backend Product.is_free).
    * Free products are excluded from giveaway prize selection. */
   is_free: boolean;
+  region: Region | null;
   created_at: string;
 }
 

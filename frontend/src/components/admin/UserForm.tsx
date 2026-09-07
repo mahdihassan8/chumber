@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import type { User, UserRole } from "@/types";
 import { adminResetPassword, createUser, updateUser } from "@/api/users";
+import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { TextField } from "@/components/common/TextField";
 import { Button } from "@/components/common/Button";
@@ -22,6 +23,8 @@ export function UserForm({ existingUser }: UserFormProps) {
   const [fullName, setFullName] = useState(existingUser?.full_name ?? "");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>(existingUser?.role ?? "customer");
+  const { user: actor } = useAuth();
+  const selectableRoles: UserRole[] = actor?.role === "super_admin" ? ["customer", "admin"] : ["customer"];
   const [isActive, setIsActive] = useState(existingUser?.is_active ?? true);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,7 +110,10 @@ export function UserForm({ existingUser }: UserFormProps) {
       <div>
         <span className="label">Role</span>
         <div className="flex gap-2">
-          {(["customer", "admin"] as UserRole[]).map((r) => (
+          {/* Only a Super Admin may grant ADMIN — the backend enforces this in
+              user_service._assert_can_assign_role, so a regular Admin would
+              just get a 403. Don't offer the option they can't use. */}
+          {selectableRoles.map((r) => (
             <button
               key={r}
               type="button"

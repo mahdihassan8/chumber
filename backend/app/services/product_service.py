@@ -3,7 +3,9 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.regions import assert_can_access, region_for_new_resource
 from app.models.product import Product
+from app.models.user import Region, User
 from app.repositories.order_repository import OrderItemRepository
 from app.repositories.product_repository import ProductRepository
 from app.schemas.product import ProductCreate, ProductUpdate
@@ -17,9 +19,9 @@ def get_sales_map(db: Session) -> dict[uuid.UUID, int]:
     return {product_id: int(total) for product_id, total in sold_rows}
 
 
-def list_products(db: Session, *, only_available: bool) -> list[Product]:
+def list_products(db: Session, *, only_available: bool, region: Region | None) -> list[Product]:
     repo = ProductRepository(db)
-    products = repo.list_available() if only_available else repo.list_all()
+    products = repo.list_available(region) if only_available else repo.list_all(region)
 
     sold_by_id = get_sales_map(db)
     # Best-selling first; ties (including the common all-zero case) fall back
@@ -28,15 +30,23 @@ def list_products(db: Session, *, only_available: bool) -> list[Product]:
     return products
 
 
-def get_product_or_404(db: Session, product_id: uuid.UUID) -> Product:
+def get_product_or_404(db: Session, product_id: uuid.UUID, viewer: User, current: Region) -> Product:
+    """Region check happens here, so *every* by-id product path is covered —
+    fetching, editing, restocking, image upload, adding to a cart. A product in
+    the other region is reported as not found, never as forbidden."""
     product = ProductRepository(db).get_by_id(product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    assert_can_access(viewer, product.region, current, what="Product")
     return product
 
 
-def create_product(db: Session, payload: ProductCreate) -> Product:
-    product = Product(**payload.model_dump())
+def create_product(db: Session, payload: ProductCreate, actor: User, current: Region) -> Product:
+    data = payload.model_dump()
+    # The product lands in the caller's current region, never one named in
+    # the body — a Najaf admin cannot create Baghdad stock.
+    data["region"] = region_for_new_resource(actor, current)
+    product = Product(**data)
     ProductRepository(db).add(product)
     db.commit()
     db.refresh(product)
@@ -44,7 +54,10 @@ def create_product(db: Session, payload: ProductCreate) -> Product:
 
 
 def update_product(db: Session, product: Product, payload: ProductUpdate) -> Product:
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    # region is not an updatable field: a product stays in the region it was
+    # created in, so existing orders and history never change meaning.
+    fields = payload.model_dump(exclude_unset=True)
+    for field, value in fields.items():
         setattr(product, field, value)
     db.commit()
     db.refresh(product)

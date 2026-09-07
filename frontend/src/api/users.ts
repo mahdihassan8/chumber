@@ -1,5 +1,5 @@
 import { api } from "@/api/client";
-import type { User, UserRole } from "@/types";
+import type { Region, User, UserRole } from "@/types";
 
 export interface CreateUserInput {
   username: string;
@@ -7,6 +7,7 @@ export interface CreateUserInput {
   full_name: string;
   password: string;
   role: UserRole;
+  region?: Region | null;
 }
 
 export interface UpdateUserInput {
@@ -34,6 +35,18 @@ export function updateUser(id: string, payload: UpdateUserInput): Promise<User> 
 
 export function deleteUser(id: string): Promise<void> {
   return api.delete<void>(`/api/users/${id}`);
+}
+
+/** Super Admin only. The backend re-checks `confirmUsername` against the
+ * target account, so this is not merely a UI guard. */
+/** Super Admin only: replace which regions an account may use. Granting opens
+ * an empty wallet in that region; revoking leaves its history untouched. */
+export function setUserRegions(id: string, regions: Region[]): Promise<User> {
+  return api.put<User>(`/api/users/${id}/regions`, { regions });
+}
+
+export function permanentlyDeleteUser(id: string, confirmUsername: string): Promise<void> {
+  return api.post<void>(`/api/users/${id}/permanent-delete`, { confirm_username: confirmUsername });
 }
 
 export interface MessageResponse {

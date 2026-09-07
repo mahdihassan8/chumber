@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user, require_admin, require_super_admin
+from app.core.regions import get_admin_scope, get_current_region
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import Region, User
 from app.schemas.balance import BalanceRead
 from app.schemas.order import OrderRead
 from app.schemas.user import (
@@ -14,6 +15,8 @@ from app.schemas.user import (
     AdminResetPasswordRequest,
     ChangePasswordRequest,
     MessageResponse,
+    PermanentDeleteRequest,
+    SetUserRegionsRequest,
     UserCreate,
     UserRead,
     UserUpdateByAdmin,
@@ -25,14 +28,19 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 
 
 @router.get("", response_model=list[UserRead])
-def list_users(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> list[UserRead]:
-    users = user_service.list_users(db)
+def list_users(actor: User = Depends(require_admin), scope: Region | None = Depends(get_admin_scope), db: Session = Depends(get_db)) -> list[UserRead]:
+    users = user_service.list_users(db, scope)
     return [UserRead.model_validate(u) for u in users]
 
 
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def create_user(payload: UserCreate, _: User = Depends(require_admin), db: Session = Depends(get_db)) -> UserRead:
-    user = user_service.create_user(db, payload)
+def create_user(
+    payload: UserCreate,
+    actor: User = Depends(require_admin),
+    region: Region = Depends(get_current_region),
+    db: Session = Depends(get_db),
+) -> UserRead:
+    user = user_service.create_user(db, payload, actor, region)
     return UserRead.model_validate(user)
 
 
@@ -58,29 +66,31 @@ def change_own_password(
 
 
 @router.get("/me/orders", response_model=list[OrderRead])
-def read_own_orders(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[OrderRead]:
-    orders = order_service.list_by_user(db, current_user.id)
+def read_own_orders(
+    current_user: User = Depends(get_current_user), region: Region = Depends(get_current_region), db: Session = Depends(get_db)
+) -> list[OrderRead]:
+    orders = order_service.list_by_user(db, current_user.id, region)
     return [OrderRead.model_validate(o) for o in orders]
 
 
 @router.get("/{user_id}", response_model=UserRead)
-def get_user(user_id: uuid.UUID, _: User = Depends(require_admin), db: Session = Depends(get_db)) -> UserRead:
-    user = user_service.get_user_or_404(db, user_id)
+def get_user(user_id: uuid.UUID, actor: User = Depends(require_admin), scope: Region | None = Depends(get_admin_scope), db: Session = Depends(get_db)) -> UserRead:
+    user = user_service.get_user_or_404(db, user_id, actor, scope)
     return UserRead.model_validate(user)
 
 
 @router.patch("/{user_id}", response_model=UserRead)
 def update_user(
-    user_id: uuid.UUID, payload: UserUpdateByAdmin, _: User = Depends(require_admin), db: Session = Depends(get_db)
+    user_id: uuid.UUID, payload: UserUpdateByAdmin, actor: User = Depends(require_admin), scope: Region | None = Depends(get_admin_scope), db: Session = Depends(get_db)
 ) -> UserRead:
-    user = user_service.get_user_or_404(db, user_id)
-    user = user_service.update_user_by_admin(db, user, payload)
+    user = user_service.get_user_or_404(db, user_id, actor, scope)
+    user = user_service.update_user_by_admin(db, user, payload, actor)
     return UserRead.model_validate(user)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: uuid.UUID, current_admin: User = Depends(require_admin), db: Session = Depends(get_db)) -> None:
-    user = user_service.get_user_or_404(db, user_id)
+def delete_user(user_id: uuid.UUID, current_admin: User = Depends(require_admin), scope: Region | None = Depends(get_admin_scope), db: Session = Depends(get_db)) -> None:
+    user = user_service.get_user_or_404(db, user_id, current_admin, scope)
     try:
         user_service.delete_user(db, user, current_admin)
     except IntegrityError:
@@ -91,41 +101,89 @@ def delete_user(user_id: uuid.UUID, current_admin: User = Depends(require_admin)
         )
 
 
+@router.put("/{user_id}/regions", response_model=UserRead)
+def set_user_regions(
+    user_id: uuid.UUID,
+    payload: SetUserRegionsRequest,
+    super_admin: User = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+) -> UserRead:
+    """Super Admin only: replace which regions an account may use.
+
+    Granting a region opens an empty wallet there; revoking one leaves that
+    region's orders, ledger and balance rows completely untouched.
+    """
+    user = user_service.get_user_or_404(db, user_id)
+    user = user_service.set_user_regions(db, user, payload.regions, super_admin)
+    return UserRead.model_validate(user)
+
+
+@router.post("/{user_id}/permanent-delete", status_code=status.HTTP_204_NO_CONTENT)
+def permanently_delete_user(
+    user_id: uuid.UUID,
+    payload: PermanentDeleteRequest,
+    super_admin: User = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Super Admin only. Erases the account and everything belonging to it,
+    atomically. Requires the target's username echoed back in the body."""
+    user = user_service.get_user_or_404(db, user_id, super_admin)
+    user_service.permanently_delete_user(db, user, super_admin, payload.confirm_username)
+
+
 @router.post("/{user_id}/password", response_model=MessageResponse)
 def admin_reset_password(
-    user_id: uuid.UUID, payload: AdminResetPasswordRequest, _: User = Depends(require_admin), db: Session = Depends(get_db)
+    user_id: uuid.UUID, payload: AdminResetPasswordRequest, actor: User = Depends(require_admin), scope: Region | None = Depends(get_admin_scope), db: Session = Depends(get_db)
 ) -> MessageResponse:
-    user = user_service.get_user_or_404(db, user_id)
-    user_service.admin_reset_password(db, user, payload.new_password)
+    user = user_service.get_user_or_404(db, user_id, actor, scope)
+    user_service.admin_reset_password(db, user, payload.new_password, actor)
     return MessageResponse(message=f"Password reset for {user.username}")
 
 
 @router.get("/{user_id}/orders", response_model=list[OrderRead])
-def get_user_orders(user_id: uuid.UUID, _: User = Depends(require_admin), db: Session = Depends(get_db)) -> list[OrderRead]:
-    user_service.get_user_or_404(db, user_id)
-    orders = order_service.list_by_user(db, user_id)
+def get_user_orders(user_id: uuid.UUID, actor: User = Depends(require_admin), scope: Region | None = Depends(get_admin_scope), db: Session = Depends(get_db)) -> list[OrderRead]:
+    user_service.get_user_or_404(db, user_id, actor, scope)
+    orders = order_service.list_by_user(db, user_id, scope)
     return [OrderRead.model_validate(o) for o in orders]
 
 
 @router.get("/{user_id}/balance", response_model=BalanceRead)
-def get_user_balance(user_id: uuid.UUID, _: User = Depends(require_admin), db: Session = Depends(get_db)) -> BalanceRead:
-    user = user_service.get_user_or_404(db, user_id)
-    return balance_service.get_balance_summary(db, user)
+def get_user_balance(
+    user_id: uuid.UUID,
+    actor: User = Depends(require_admin),
+    scope: Region | None = Depends(get_admin_scope),
+    region: Region = Depends(get_current_region),
+    db: Session = Depends(get_db),
+) -> BalanceRead:
+    """A wallet is always read for one specific region — the admin's current
+    region, not an aggregate across both."""
+    user = user_service.get_user_or_404(db, user_id, actor, scope)
+    return balance_service.get_balance_summary(db, user, region)
 
 
 @router.post("/{user_id}/balance", response_model=BalanceRead)
 def add_user_balance(
-    user_id: uuid.UUID, payload: AddBalanceRequest, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+    user_id: uuid.UUID,
+    payload: AddBalanceRequest,
+    admin: User = Depends(require_admin),
+    scope: Region | None = Depends(get_admin_scope),
+    region: Region = Depends(get_current_region),
+    db: Session = Depends(get_db),
 ) -> BalanceRead:
-    user = user_service.get_user_or_404(db, user_id)
-    balance_service.add_admin_recharge(db, user=user, admin_id=admin.id, amount=payload.amount, description=payload.description)
-    return balance_service.get_balance_summary(db, user)
+    user = user_service.get_user_or_404(db, user_id, admin, scope)
+    balance_service.add_admin_recharge(db, user=user, region=region, admin_id=admin.id, amount=payload.amount, description=payload.description)
+    return balance_service.get_balance_summary(db, user, region)
 
 
 @router.post("/{user_id}/balance/subtract", response_model=BalanceRead)
 def subtract_user_balance(
-    user_id: uuid.UUID, payload: AddBalanceRequest, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+    user_id: uuid.UUID,
+    payload: AddBalanceRequest,
+    admin: User = Depends(require_admin),
+    scope: Region | None = Depends(get_admin_scope),
+    region: Region = Depends(get_current_region),
+    db: Session = Depends(get_db),
 ) -> BalanceRead:
-    user = user_service.get_user_or_404(db, user_id)
-    balance_service.subtract_admin_balance(db, user=user, admin_id=admin.id, amount=payload.amount, description=payload.description)
-    return balance_service.get_balance_summary(db, user)
+    user = user_service.get_user_or_404(db, user_id, admin, scope)
+    balance_service.subtract_admin_balance(db, user=user, region=region, admin_id=admin.id, amount=payload.amount, description=payload.description)
+    return balance_service.get_balance_summary(db, user, region)

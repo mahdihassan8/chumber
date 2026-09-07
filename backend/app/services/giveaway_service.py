@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from app.models.giveaway import Giveaway, GiveawayWinner
 from app.repositories.giveaway_repository import GiveawayRepository, GiveawayWinnerRepository
 from app.repositories.product_repository import ProductRepository
-from app.repositories.user_repository import UserRepository
+from app.models.user import Region, User, UserRole
+from app.models.user_region import UserRegion
 from app.schemas.giveaway import GiveawayResultRead, GiveawayWinnerRead
 
 BAGHDAD_TZ = ZoneInfo("Asia/Baghdad")
@@ -28,6 +29,25 @@ def _is_giveaway_day(d: date) -> bool:
     return d.weekday() in GIVEAWAY_WEEKDAYS
 
 
+def _eligible_najaf_customers(db: Session) -> list[User]:
+    """Active Customers and Admins holding Najaf membership. Super Admins are
+    never eligible, regardless of the regions they happen to be a member of.
+
+    The join yields one row per user, so an account that holds *both* regions is
+    a single participant with no extra weight in the Najaf draw.
+    """
+    return (
+        db.query(User)
+        .join(UserRegion, UserRegion.user_id == User.id)
+        .filter(
+            UserRegion.region == Region.NAJAF,
+            User.role.in_((UserRole.CUSTOMER, UserRole.ADMIN)),
+            User.is_active.is_(True),
+        )
+        .all()
+    )
+
+
 def _generate_for_date(db: Session, scheduled_date: date) -> Giveaway | None:
     """Randomly picks 2 unique winners and 1 prize product and persists a new
     Giveaway row. Returns None (generates nothing) if there isn't a large
@@ -41,9 +61,9 @@ def _generate_for_date(db: Session, scheduled_date: date) -> Giveaway | None:
     caller catches and turns into a re-fetch of the winner's row. Neither
     request can ever see or return a half-written giveaway.
     """
-    eligible_users = UserRepository(db).list_active_customers()
+    eligible_users = _eligible_najaf_customers(db)
     # Free (price 0) products are excluded — see list_giveaway_eligible.
-    eligible_products = ProductRepository(db).list_giveaway_eligible()
+    eligible_products = ProductRepository(db).list_giveaway_eligible(Region.NAJAF)
     if len(eligible_users) < 2 or not eligible_products:
         return None
 
