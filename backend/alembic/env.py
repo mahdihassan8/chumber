@@ -26,7 +26,13 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     connectable = engine_from_config(config.get_section(config.config_ini_section, {}), prefix="sqlalchemy.", poolclass=pool.NullPool)
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        # One transaction per revision, not one transaction for the whole
+        # run: e7b3f2a91c05 adds 'SUPER_ADMIN' to the user_role enum, and a
+        # later migration uses that value in an INSERT. Postgres forbids
+        # using a freshly added enum value in the same transaction that
+        # added it, so a fresh install applying several pending revisions in
+        # one `alembic upgrade head` needs each to commit separately.
+        context.configure(connection=connection, target_metadata=target_metadata, transaction_per_migration=True)
         with context.begin_transaction():
             context.run_migrations()
 
