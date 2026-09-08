@@ -8,7 +8,7 @@ from app.repositories.user_repository import UserRepository
 from app.schemas.admin import OverviewStats
 from app.schemas.balance import BalanceTransactionRead
 from app.schemas.order import OrderRead
-from app.services import total_debt_service
+from app.services import chumber_requirement_service, total_debt_service
 
 
 def get_overview(db: Session, region: Region | None) -> OverviewStats:
@@ -31,7 +31,8 @@ def get_overview(db: Session, region: Region | None) -> OverviewStats:
     total_user_balance = user_repo.sum_balances(region)
     total_inventory_value = product_repo.sum_inventory_value(region)
     total_debts = total_debt_service.sum_debts(db, region)
-    balance_difference = total_user_balance + total_debts - total_inventory_value
+    chumber_required_total = chumber_requirement_service.sum_amount(db, region)
+    balance_difference = total_user_balance + chumber_required_total - total_inventory_value
 
     recent_orders = order_repo.list_recent(10, region)
     recent_transactions = txn_repo.list_recent(10, region)

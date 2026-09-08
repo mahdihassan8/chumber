@@ -205,3 +205,73 @@ def test_overview_totals_are_region_scoped(client: TestClient, db: Session) -> N
     assert naj_total != bag_total
     assert bag_total >= 99_000
     assert naj_total >= 40_000
+
+
+# ---------------------------------------------------------------------------
+# Balance Difference: total_user_balance + chumber_required - total_inventory_value
+# (NOT total_debts -- see test_total_debts.py for confirmation that debts are
+# excluded from this calculation)
+# ---------------------------------------------------------------------------
+
+
+def test_balance_difference_matches_the_spec_example(client: TestClient, db: Session) -> None:
+    """Exactly the worked example from the spec: 600,000 user money +
+    100,000 Chumber Required - 1,000,000 inventory = -300,000, and it must
+    not be clamped to zero."""
+    admin = _admin(db, region=Region.NAJAF)
+    headers = auth_headers(client, admin.username, "password123")
+
+    cust = make_user(db, username=f"cr_bd_cust_{uuid.uuid4().hex[:6]}", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
+    client.post(f"/api/users/{cust.id}/balance", json={"amount": 600_000}, headers=headers)
+
+    make_product(db, name="CR BD Inventory Product", price=100_000, stock=10, region=Region.NAJAF)  # 1,000,000 IQD on hand
+
+    client.put("/api/admin/chumber-required", json={"amount": 100_000}, headers=headers)
+
+    overview = client.get("/api/admin/overview", headers=headers).json()
+    assert overview["total_user_balance"] == 600_000.0
+    assert overview["total_inventory_value"] == 1_000_000.0
+    assert overview["balance_difference"] == -300_000.0
+
+
+def test_balance_difference_updates_live_after_a_recharge(client: TestClient, db: Session) -> None:
+    admin = _admin(db)
+    headers = auth_headers(client, admin.username, "password123")
+    cust = make_user(db, username=f"cr_bd_cust2_{uuid.uuid4().hex[:6]}", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
+
+    before = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
+    client.post(f"/api/users/{cust.id}/balance", json={"amount": 5_000}, headers=headers)
+    after = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
+
+    assert after == before + 5_000
+
+
+def test_unset_chumber_required_counts_as_zero_in_balance_difference(client: TestClient, db: Session) -> None:
+    admin = _admin(db)
+    headers = auth_headers(client, admin.username, "password123")
+    overview = client.get("/api/admin/overview", headers=headers).json()
+    assert overview["balance_difference"] == overview["total_user_balance"] - overview["total_inventory_value"]
+
+
+def test_setting_chumber_required_updates_balance_difference(client: TestClient, db: Session) -> None:
+    admin = _admin(db)
+    headers = auth_headers(client, admin.username, "password123")
+
+    before = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
+    client.put("/api/admin/chumber-required", json={"amount": 50_000}, headers=headers)
+    after = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
+
+    assert after == before + 50_000
+
+
+def test_clearing_chumber_required_updates_balance_difference(client: TestClient, db: Session) -> None:
+    admin = _admin(db)
+    headers = auth_headers(client, admin.username, "password123")
+
+    client.put("/api/admin/chumber-required", json={"amount": 50_000}, headers=headers)
+    with_requirement = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
+
+    client.delete("/api/admin/chumber-required", headers=headers)
+    after_clear = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
+
+    assert after_clear == with_requirement - 50_000

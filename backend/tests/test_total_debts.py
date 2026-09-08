@@ -96,59 +96,21 @@ def test_value_is_region_scoped(client: TestClient, db: Session) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Balance Difference: total_user_balance + total_debts - total_inventory_value
+# Total Debts is displayed on its own (overview.total_debts) but, per spec,
+# must NOT feed into Balance Difference -- that calculation uses Chumber
+# Required instead (see test_chumber_requirement.py).
 # ---------------------------------------------------------------------------
 
 
-def test_balance_difference_matches_the_spec_example(client: TestClient, db: Session) -> None:
-    """Exactly the worked example from the spec: 600,000 user money +
-    100,000 debts - 1,000,000 inventory = -300,000, and it must not be
-    clamped to zero."""
-    admin = _admin(db, region=Region.NAJAF)
-    headers = auth_headers(client, admin.username, "password123")
-
-    cust = make_user(db, username=f"td_cust_{uuid.uuid4().hex[:6]}", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
-    client.post(f"/api/users/{cust.id}/balance", json={"amount": 600_000}, headers=headers)
-
-    make_product(db, name="TD Inventory Product", price=100_000, stock=10, region=Region.NAJAF)  # 1,000,000 IQD on hand
-
-    client.put("/api/admin/total-debts", json={"amount": 100_000}, headers=headers)
-
-    overview = client.get("/api/admin/overview", headers=headers).json()
-    assert overview["total_user_balance"] == 600_000.0
-    assert overview["total_debts"] == 100_000.0
-    assert overview["total_inventory_value"] == 1_000_000.0
-    assert overview["balance_difference"] == -300_000.0
-
-
-def test_balance_difference_updates_live_after_a_recharge(client: TestClient, db: Session) -> None:
-    admin = _admin(db)
-    headers = auth_headers(client, admin.username, "password123")
-    cust = make_user(db, username=f"td_cust2_{uuid.uuid4().hex[:6]}", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
-
-    before = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
-    client.post(f"/api/users/{cust.id}/balance", json={"amount": 5_000}, headers=headers)
-    after = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
-
-    assert after == before + 5_000
-
-
-def test_unset_debts_counts_as_zero_in_balance_difference(client: TestClient, db: Session) -> None:
-    admin = _admin(db)
-    headers = auth_headers(client, admin.username, "password123")
-    overview = client.get("/api/admin/overview", headers=headers).json()
-    assert overview["total_debts"] == 0.0
-    assert overview["balance_difference"] == overview["total_user_balance"] - overview["total_inventory_value"]
-
-
-def test_clearing_debts_updates_balance_difference(client: TestClient, db: Session) -> None:
+def test_total_debts_value_does_not_affect_balance_difference(client: TestClient, db: Session) -> None:
     admin = _admin(db)
     headers = auth_headers(client, admin.username, "password123")
 
-    client.put("/api/admin/total-debts", json={"amount": 50_000}, headers=headers)
-    with_debt = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
+    before = client.get("/api/admin/overview", headers=headers).json()
+    assert before["total_debts"] == 0.0
 
-    client.delete("/api/admin/total-debts", headers=headers)
-    after_clear = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
+    client.put("/api/admin/total-debts", json={"amount": 999_999}, headers=headers)
+    after = client.get("/api/admin/overview", headers=headers).json()
 
-    assert after_clear == with_debt - 50_000
+    assert after["total_debts"] == 999_999.0
+    assert after["balance_difference"] == before["balance_difference"]

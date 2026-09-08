@@ -19,9 +19,10 @@ class OverviewStats(BaseModel):
     total_user_balance: float
     total_inventory_value: float
     total_debts: float
-    # total_user_balance + total_debts - total_inventory_value. Can be
-    # negative — that's a meaningful signal (inventory outweighs money +
-    # debts), never clamped to zero.
+    # total_user_balance + chumber_required - total_inventory_value (using the
+    # Chumber Required amount already stored in the database, NOT
+    # total_debts). Can be negative — that's a meaningful signal (inventory
+    # outweighs money + Chumber Required), never clamped to zero.
     balance_difference: float
     recent_orders: list[OrderRead]
     recent_transactions: list[BalanceTransactionRead]

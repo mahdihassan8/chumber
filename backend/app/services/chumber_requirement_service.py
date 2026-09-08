@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.chumber_requirement import ChumberRequirement
@@ -36,3 +37,14 @@ def clear_value(db: Session, region: Region, actor: User) -> ChumberRequirement:
     db.commit()
     db.refresh(row)
     return row
+
+
+def sum_amount(db: Session, region: Region | None) -> float:
+    """Total Chumber Required across the given scope, for the Balance
+    Difference calculation -- an unset (null) region's amount counts as 0,
+    and None sums both regions, matching how total_user_balance/
+    total_inventory_value treat an all-regions scope."""
+    query = db.query(func.sum(ChumberRequirement.amount))
+    if region is not None:
+        query = query.filter(ChumberRequirement.region == region)
+    return float(query.scalar() or 0)
