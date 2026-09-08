@@ -11,6 +11,7 @@ from app.models.product import Product
 from app.models.reward import WeeklyReward
 from app.models.total_debt import TotalDebt
 from app.models.transaction import BalanceTransaction, TransactionType
+from app.models.transfer import Transfer, TransferStatus
 from app.models.user import Region, User, UserRole
 from app.models.user_region import UserRegion
 
@@ -31,6 +32,8 @@ __all__ = [
     "TotalDebt",
     "BalanceTransaction",
     "TransactionType",
+    "Transfer",
+    "TransferStatus",
     "Region",
     "User",
     "UserRegion",

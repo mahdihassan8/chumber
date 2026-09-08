@@ -151,6 +151,33 @@ export interface TotalDebt {
   updated_at: string | null;
 }
 
+export interface TransferRecipient {
+  id: string;
+  username: string;
+  full_name: string;
+  avatar_url: string | null;
+}
+
+export type TransferStatus = "completed";
+
+export interface Transfer {
+  id: string;
+  sender_id: string | null;
+  sender_username: string | null;
+  sender_full_name: string | null;
+  sender_avatar_url: string | null;
+  recipient_id: string | null;
+  recipient_username: string | null;
+  recipient_full_name: string | null;
+  recipient_avatar_url: string | null;
+  region: Region;
+  /** IQD, like every money field in the API. */
+  amount: number;
+  note: string | null;
+  status: TransferStatus;
+  created_at: string;
+}
+
 export interface GiveawayWinner {
   id: string;
   username: string;

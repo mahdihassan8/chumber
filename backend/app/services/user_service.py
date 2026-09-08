@@ -12,6 +12,7 @@ from app.models.giveaway import GiveawayWinner
 from app.models.order import Order, OrderItem
 from app.models.total_debt import TotalDebt
 from app.models.transaction import BalanceTransaction
+from app.models.transfer import Transfer
 from app.models.reward import WeeklyReward
 from app.models.user import Region, User, UserRole
 from app.models.user_region import UserRegion
@@ -178,6 +179,16 @@ def permanently_delete_user(db: Session, user: User, super_admin: User, confirm_
         )
         db.query(TotalDebt).filter(TotalDebt.updated_by_id == user.id).update(
             {TotalDebt.updated_by_id: None}, synchronize_session=False
+        )
+        # A transfer is shared history between two people, not exclusively
+        # either one's data -- it must survive one side's account being
+        # removed, so blank whichever end points at this account rather than
+        # deleting the row (which would erase the other party's history too).
+        db.query(Transfer).filter(Transfer.sender_id == user.id).update(
+            {Transfer.sender_id: None}, synchronize_session=False
+        )
+        db.query(Transfer).filter(Transfer.recipient_id == user.id).update(
+            {Transfer.recipient_id: None}, synchronize_session=False
         )
 
         db.query(GiveawayWinner).filter(GiveawayWinner.user_id == user.id).delete(synchronize_session=False)

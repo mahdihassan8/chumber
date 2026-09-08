@@ -1,5 +1,5 @@
 import { api } from "@/api/client";
-import type { ChumberRequirement, OverviewStats, TotalDebt } from "@/types";
+import type { ChumberRequirement, OverviewStats, TotalDebt, Transfer } from "@/types";
 
 export function getOverview(): Promise<OverviewStats> {
   return api.get<OverviewStats>("/api/admin/overview");
@@ -27,4 +27,8 @@ export function setTotalDebts(amount: number): Promise<TotalDebt> {
 
 export function clearTotalDebts(): Promise<TotalDebt> {
   return api.delete<TotalDebt>("/api/admin/total-debts");
+}
+
+export function getAllTransfers(): Promise<Transfer[]> {
+  return api.get<Transfer[]>("/api/admin/transfers");
 }

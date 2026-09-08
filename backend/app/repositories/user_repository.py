@@ -57,6 +57,12 @@ class UserRepository(BaseRepository[User]):
         query = self.db.query(User).filter(User.role == UserRole.CUSTOMER, User.is_active.is_(True))
         return self._scoped(query, region).all()
 
+    def list_transfer_recipients(self, region: Region, exclude_id: uuid.UUID) -> list[User]:
+        """Everyone eligible as a Transfer Money recipient: active accounts
+        that hold a wallet in this region, other than the caller themselves."""
+        query = self.db.query(User).filter(User.is_active.is_(True), User.id != exclude_id)
+        return self._scoped(query, region).order_by(User.full_name).all()
+
     def count(self, region: Region | None = None) -> int:
         return self._scoped(self.db.query(func.count(User.id)), region).scalar() or 0
 

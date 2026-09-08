@@ -10,7 +10,8 @@ from app.schemas.admin import OverviewStats
 from app.schemas.chumber_requirement import ChumberRequirementRead, ChumberRequirementSet
 from app.schemas.order import OrderRead
 from app.schemas.total_debt import TotalDebtRead, TotalDebtSet
-from app.services import admin_service, chumber_requirement_service, order_service, total_debt_service
+from app.schemas.transfer import TransferRead
+from app.services import admin_service, chumber_requirement_service, order_service, total_debt_service, transfer_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -28,6 +29,14 @@ def list_all_orders(
 ) -> list[OrderRead]:
     orders = order_service.list_all(db, scope)
     return [OrderRead.model_validate(o) for o in orders]
+
+
+@router.get("/transfers", response_model=list[TransferRead])
+def list_all_transfers(
+    _: User = Depends(require_admin), scope: Region | None = Depends(get_admin_scope), db: Session = Depends(get_db)
+) -> list[TransferRead]:
+    transfers = transfer_service.list_all(db, scope)
+    return [TransferRead.model_validate(t) for t in transfers]
 
 
 # --- Chumber Required ------------------------------------------------------

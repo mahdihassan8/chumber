@@ -9,6 +9,7 @@ import { CheckoutPage } from "@/pages/CheckoutPage";
 import { PurchaseHistoryPage } from "@/pages/PurchaseHistoryPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { GiveawayPage } from "@/pages/GiveawayPage";
+import { TransferMoneyPage } from "@/pages/TransferMoneyPage";
 
 import { AdminLayout } from "@/pages/admin/AdminLayout";
 import { OverviewPage } from "@/pages/admin/OverviewPage";
@@ -21,6 +22,7 @@ import { RestockPage } from "@/pages/admin/RestockPage";
 import { BalanceManagementPage } from "@/pages/admin/BalanceManagementPage";
 import { OrderManagementPage } from "@/pages/admin/OrderManagementPage";
 import { AIRestockingPage } from "@/pages/admin/AIRestockingPage";
+import { TransferHistoryPage } from "@/pages/admin/TransferHistoryPage";
 
 export function AppRouter() {
   return (
@@ -35,6 +37,7 @@ export function AppRouter() {
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/history" element={<PurchaseHistoryPage />} />
           <Route path="/giveaway" element={<GiveawayPage />} />
+          <Route path="/transfer" element={<TransferMoneyPage />} />
           <Route path="/profile" element={<ProfilePage />} />
 
           <Route element={<AdminRoute />}>
@@ -51,6 +54,7 @@ export function AppRouter() {
               <Route path="balance" element={<BalanceManagementPage />} />
               <Route path="orders" element={<OrderManagementPage />} />
               <Route path="ai-restocking" element={<AIRestockingPage />} />
+              <Route path="transfers" element={<TransferHistoryPage />} />
             </Route>
           </Route>
         </Route>

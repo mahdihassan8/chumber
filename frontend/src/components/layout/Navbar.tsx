@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { to: "/", label: "Marketplace", end: true },
   { to: "/history", label: "Purchase History", end: false },
   { to: "/giveaway", label: "Giveaway", end: false },
+  { to: "/transfer", label: "Transfer Money", end: false },
 ];
 
 function NavItem({ to, label, end }: { to: string; label: string; end: boolean }) {
