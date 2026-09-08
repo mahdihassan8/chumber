@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { listTransferRecipients, sendTransfer, getMyTransferHistory } from "@/api/transfers";
-import { getMyBalance } from "@/api/balance";
 import type { Transfer, TransferRecipient } from "@/types";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { RecipientList } from "@/components/transfer/RecipientList";
@@ -11,6 +10,7 @@ import { TextField } from "@/components/common/TextField";
 import { ErrorState } from "@/components/common/ErrorState";
 import { BeansAmount } from "@/components/common/BeansAmount";
 import { useAuth } from "@/context/AuthContext";
+import { useBalance } from "@/context/BalanceContext";
 import { useRegion } from "@/context/RegionContext";
 import { useToast } from "@/context/ToastContext";
 import { formatBeans, IQD_PER_BEAN } from "@/utils/assets";
@@ -22,6 +22,10 @@ export function TransferMoneyPage() {
   const { user } = useAuth();
   const { current } = useRegion();
   const { showToast } = useToast();
+  // Shared with the navbar/profile balance display -- calling refresh() here
+  // after a successful transfer updates the sender's balance everywhere
+  // immediately, with no page reload needed.
+  const { balance, refresh: refreshBalance } = useBalance();
 
   const [tab, setTab] = useState<Tab>("send");
 
@@ -29,9 +33,6 @@ export function TransferMoneyPage() {
   const [recipientsLoading, setRecipientsLoading] = useState(true);
   const [recipientsError, setRecipientsError] = useState<string | null>(null);
   const [selected, setSelected] = useState<TransferRecipient | null>(null);
-
-  // IQD -- the wire unit. Only ever shown to the customer converted to Beans.
-  const [balance, setBalance] = useState<number | null>(null);
 
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -51,12 +52,6 @@ export function TransferMoneyPage() {
       .finally(() => setRecipientsLoading(false));
   };
 
-  const loadBalance = () => {
-    getMyBalance()
-      .then((b) => setBalance(b.balance))
-      .catch(() => setBalance(null));
-  };
-
   const loadHistory = () => {
     setHistoryLoading(true);
     setHistoryError(null);
@@ -68,9 +63,10 @@ export function TransferMoneyPage() {
 
   useEffect(() => {
     loadRecipients();
-    loadBalance();
     loadHistory();
     setSelected(null);
+    // Balance itself is shared global state (BalanceContext) and already
+    // re-fetches on its own when the region changes -- nothing to trigger here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current]);
 
@@ -109,7 +105,9 @@ export function TransferMoneyPage() {
       showToast(`Sent ${formatBeans(iqd)} Beans to ${selected.full_name}`, "success");
       resetForm();
       setSelected(null);
-      loadBalance();
+      // Immediate, no-refresh updates: the sender's balance (everywhere it's
+      // shown, including the navbar) and their own transfer history.
+      refreshBalance();
       loadHistory();
     } catch (err) {
       setFormError(err instanceof ApiRequestError ? err.message : "Could not send transfer");

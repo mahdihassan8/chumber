@@ -1,5 +1,6 @@
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
+import { BalanceProvider } from "@/context/BalanceContext";
 import { CartProvider } from "@/context/CartContext";
 import { RegionProvider } from "@/context/RegionContext";
 import { ToastProvider } from "@/context/ToastContext";
@@ -12,10 +13,12 @@ export default function App() {
       <ToastProvider>
         <AuthProvider>
           <RegionProvider>
+          <BalanceProvider>
           <CartProvider>
             <AppRouter />
             <ToastContainer />
           </CartProvider>
+          </BalanceProvider>
           </RegionProvider>
         </AuthProvider>
       </ToastProvider>

@@ -1,5 +1,5 @@
 import { api } from "@/api/client";
-import type { ChumberRequirement, OverviewStats, TotalDebt, Transfer } from "@/types";
+import type { ChumberRequirement, OverviewStats, Transfer } from "@/types";
 
 export function getOverview(): Promise<OverviewStats> {
   return api.get<OverviewStats>("/api/admin/overview");
@@ -15,18 +15,6 @@ export function setChumberRequired(amount: number, note: string | null): Promise
 
 export function clearChumberRequired(): Promise<ChumberRequirement> {
   return api.delete<ChumberRequirement>("/api/admin/chumber-required");
-}
-
-export function getTotalDebts(): Promise<TotalDebt> {
-  return api.get<TotalDebt>("/api/admin/total-debts");
-}
-
-export function setTotalDebts(amount: number): Promise<TotalDebt> {
-  return api.put<TotalDebt>("/api/admin/total-debts", { amount });
-}
-
-export function clearTotalDebts(): Promise<TotalDebt> {
-  return api.delete<TotalDebt>("/api/admin/total-debts");
 }
 
 export function getAllTransfers(): Promise<Transfer[]> {

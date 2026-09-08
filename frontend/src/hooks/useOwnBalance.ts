@@ -1,32 +1,13 @@
-import { useEffect, useState } from "react";
-import { getMyBalance } from "@/api/balance";
-import { useAuth } from "@/context/AuthContext";
-import { useRegion } from "@/context/RegionContext";
+import { useBalance } from "@/context/BalanceContext";
 
 /** The signed-in account's balance **for the current region**.
  *
- * Balances are per region now, so this can't come from the auth payload any
- * more — it is fetched from /api/balance, which the backend scopes to the
- * region this request nominated. Re-fetches whenever the region changes.
+ * Thin proxy over the shared BalanceContext (one fetch, one source of truth
+ * for every consumer) so this hook's existing call sites -- the navbar pill,
+ * the Profile page -- don't need to change, but all still update together
+ * the instant something elsewhere (e.g. a Transfer Money send) calls
+ * useBalance().refresh(), with no page reload required.
  */
 export function useOwnBalance(): number | null {
-  const { user } = useAuth();
-  const { current } = useRegion();
-  const [balance, setBalance] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!user) {
-      setBalance(null);
-      return;
-    }
-    let cancelled = false;
-    getMyBalance()
-      .then((b) => !cancelled && setBalance(b.balance))
-      .catch(() => !cancelled && setBalance(null));
-    return () => {
-      cancelled = true;
-    };
-  }, [user, current]);
-
-  return balance;
+  return useBalance().balance;
 }

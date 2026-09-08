@@ -208,15 +208,13 @@ def test_overview_totals_are_region_scoped(client: TestClient, db: Session) -> N
 
 
 # ---------------------------------------------------------------------------
-# Balance Difference: total_user_balance + chumber_required - total_inventory_value
-# (NOT total_debts -- see test_total_debts.py for confirmation that debts are
-# excluded from this calculation)
+# Balance Difference: total_inventory_value - (total_user_balance + chumber_required)
 # ---------------------------------------------------------------------------
 
 
 def test_balance_difference_matches_the_spec_example(client: TestClient, db: Session) -> None:
-    """Exactly the worked example from the spec: 600,000 user money +
-    100,000 Chumber Required - 1,000,000 inventory = -300,000, and it must
+    """Exactly the worked example from the spec: 1,000,000 inventory -
+    (600,000 user money + 100,000 Chumber Required) = +300,000, and it must
     not be clamped to zero."""
     admin = _admin(db, region=Region.NAJAF)
     headers = auth_headers(client, admin.username, "password123")
@@ -231,10 +229,39 @@ def test_balance_difference_matches_the_spec_example(client: TestClient, db: Ses
     overview = client.get("/api/admin/overview", headers=headers).json()
     assert overview["total_user_balance"] == 600_000.0
     assert overview["total_inventory_value"] == 1_000_000.0
-    assert overview["balance_difference"] == -300_000.0
+    assert overview["balance_difference"] == 300_000.0
+
+
+def test_balance_difference_can_be_negative_when_money_outweighs_inventory(client: TestClient, db: Session) -> None:
+    admin = _admin(db, region=Region.NAJAF)
+    headers = auth_headers(client, admin.username, "password123")
+
+    cust = make_user(db, username=f"cr_bd_neg_{uuid.uuid4().hex[:6]}", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
+    client.post(f"/api/users/{cust.id}/balance", json={"amount": 900_000}, headers=headers)
+    make_product(db, name="CR BD Small Inventory", price=1_000, stock=10, region=Region.NAJAF)  # 10,000 IQD on hand
+
+    overview = client.get("/api/admin/overview", headers=headers).json()
+    assert overview["balance_difference"] == overview["total_inventory_value"] - overview["total_user_balance"]
+    assert overview["balance_difference"] < 0
+
+
+def test_balance_difference_is_exactly_zero_when_balanced(client: TestClient, db: Session) -> None:
+    admin = _admin(db, region=Region.NAJAF)
+    headers = auth_headers(client, admin.username, "password123")
+
+    cust = make_user(db, username=f"cr_bd_zero_{uuid.uuid4().hex[:6]}", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
+    client.post(f"/api/users/{cust.id}/balance", json={"amount": 250_000}, headers=headers)
+    make_product(db, name="CR BD Exact Inventory", price=250_000, stock=1, region=Region.NAJAF)  # 250,000 IQD on hand
+
+    overview = client.get("/api/admin/overview", headers=headers).json()
+    assert overview["total_user_balance"] == 250_000.0
+    assert overview["total_inventory_value"] == 250_000.0
+    assert overview["balance_difference"] == 0.0
 
 
 def test_balance_difference_updates_live_after_a_recharge(client: TestClient, db: Session) -> None:
+    """More user money now counts against the difference (it's subtracted),
+    so a recharge must move it down, not up."""
     admin = _admin(db)
     headers = auth_headers(client, admin.username, "password123")
     cust = make_user(db, username=f"cr_bd_cust2_{uuid.uuid4().hex[:6]}", password="password123", role=UserRole.CUSTOMER, region=Region.NAJAF)
@@ -243,17 +270,19 @@ def test_balance_difference_updates_live_after_a_recharge(client: TestClient, db
     client.post(f"/api/users/{cust.id}/balance", json={"amount": 5_000}, headers=headers)
     after = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
 
-    assert after == before + 5_000
+    assert after == before - 5_000
 
 
 def test_unset_chumber_required_counts_as_zero_in_balance_difference(client: TestClient, db: Session) -> None:
     admin = _admin(db)
     headers = auth_headers(client, admin.username, "password123")
     overview = client.get("/api/admin/overview", headers=headers).json()
-    assert overview["balance_difference"] == overview["total_user_balance"] - overview["total_inventory_value"]
+    assert overview["balance_difference"] == overview["total_inventory_value"] - overview["total_user_balance"]
 
 
 def test_setting_chumber_required_updates_balance_difference(client: TestClient, db: Session) -> None:
+    """Chumber Required is subtracted too, so raising it must move the
+    difference down, not up."""
     admin = _admin(db)
     headers = auth_headers(client, admin.username, "password123")
 
@@ -261,7 +290,7 @@ def test_setting_chumber_required_updates_balance_difference(client: TestClient,
     client.put("/api/admin/chumber-required", json={"amount": 50_000}, headers=headers)
     after = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
 
-    assert after == before + 50_000
+    assert after == before - 50_000
 
 
 def test_clearing_chumber_required_updates_balance_difference(client: TestClient, db: Session) -> None:
@@ -274,4 +303,4 @@ def test_clearing_chumber_required_updates_balance_difference(client: TestClient
     client.delete("/api/admin/chumber-required", headers=headers)
     after_clear = client.get("/api/admin/overview", headers=headers).json()["balance_difference"]
 
-    assert after_clear == with_requirement - 50_000
+    assert after_clear == with_requirement + 50_000

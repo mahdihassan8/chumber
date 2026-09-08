@@ -9,7 +9,6 @@ from app.models.giveaway import Giveaway, GiveawayWinner
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product
 from app.models.reward import WeeklyReward
-from app.models.total_debt import TotalDebt
 from app.models.transaction import BalanceTransaction, TransactionType
 from app.models.transfer import Transfer, TransferStatus
 from app.models.user import Region, User, UserRole
@@ -29,7 +28,6 @@ __all__ = [
     "OrderStatus",
     "Product",
     "WeeklyReward",
-    "TotalDebt",
     "BalanceTransaction",
     "TransactionType",
     "Transfer",

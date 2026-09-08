@@ -18,11 +18,10 @@ class OverviewStats(BaseModel):
     # recharge, or stock change.
     total_user_balance: float
     total_inventory_value: float
-    total_debts: float
-    # total_user_balance + chumber_required - total_inventory_value (using the
-    # Chumber Required amount already stored in the database, NOT
-    # total_debts). Can be negative — that's a meaningful signal (inventory
-    # outweighs money + Chumber Required), never clamped to zero.
+    # total_inventory_value - (total_user_balance + chumber_required), using
+    # the Chumber Required amount already stored in the database. Positive
+    # means inventory value outweighs money + Chumber Required combined;
+    # negative means the reverse. Never clamped to zero either way.
     balance_difference: float
     recent_orders: list[OrderRead]
     recent_transactions: list[BalanceTransactionRead]

@@ -131,8 +131,7 @@ export interface OverviewStats {
   total_balance_distributed: number;
   total_user_balance: number;
   total_inventory_value: number;
-  total_debts: number;
-  // total_user_balance + total_debts - total_inventory_value. Can be negative.
+  // total_inventory_value - (total_user_balance + chumber_required). Can be negative.
   balance_difference: number;
   recent_orders: Order[];
   recent_transactions: BalanceTransaction[];
@@ -142,12 +141,6 @@ export interface ChumberRequirement {
   region: Region;
   amount: number | null;
   note: string | null;
-  updated_at: string | null;
-}
-
-export interface TotalDebt {
-  region: Region;
-  amount: number | null;
   updated_at: string | null;
 }
 

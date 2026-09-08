@@ -24,6 +24,17 @@ export function formatIQD(amount: number): string {
   return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(amount)} IQD`;
 }
 
+/** Same as formatIQD, but with an explicit leading sign: "+" on a positive
+ * value (formatIQD/Intl suppress it by default) and "-" on a negative one,
+ * so a figure like Balance Difference is never ambiguous at a glance. Exactly
+ * zero gets no sign at all. */
+export function formatSignedIQD(amount: number): string {
+  const magnitude = formatIQD(Math.abs(amount));
+  if (amount > 0) return `+${magnitude}`;
+  if (amount < 0) return `-${magnitude}`;
+  return magnitude;
+}
+
 /** The backend stores everything in IQD — this is a display-only conversion
  * for the marketplace/shopper-facing UI, which shows "Beans" instead: whole
  * numbers, no symbol, no decimals. 250 IQD = 1 Bean (so 1,000 IQD = 4 Beans).
