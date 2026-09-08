@@ -63,3 +63,15 @@ class UserRepository(BaseRepository[User]):
     def count_by_role(self, role: UserRole, region: Region | None = None) -> int:
         query = self.db.query(func.count(User.id)).filter(User.role == role)
         return self._scoped(query, region).scalar() or 0
+
+    def sum_balances(self, region: Region | None = None) -> float:
+        """Total money currently held across every wallet. Summed directly
+        over UserRegion rows rather than joined off User: a dual-region user
+        has two separate wallets, and going through `_scoped`'s User-join
+        would either double their row or require an extra DISTINCT, either of
+        which risks silently mis-summing money. None sums every wallet in
+        both regions, i.e. the whole system's total."""
+        query = self.db.query(func.sum(UserRegion.balance))
+        if region is not None:
+            query = query.filter(UserRegion.region == region)
+        return float(query.scalar() or 0)

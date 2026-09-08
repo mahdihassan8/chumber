@@ -13,5 +13,10 @@ class OverviewStats(BaseModel):
     out_of_stock_products: int
     total_orders: int
     total_balance_distributed: float
+    # Live aggregates, not stored figures: always computed fresh from the
+    # ledger/product tables so they can never drift out of sync with a spend,
+    # recharge, or stock change.
+    total_user_balance: float
+    total_inventory_value: float
     recent_orders: list[OrderRead]
     recent_transactions: list[BalanceTransactionRead]

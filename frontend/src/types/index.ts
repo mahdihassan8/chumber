@@ -129,8 +129,17 @@ export interface OverviewStats {
   out_of_stock_products: number;
   total_orders: number;
   total_balance_distributed: number;
+  total_user_balance: number;
+  total_inventory_value: number;
   recent_orders: Order[];
   recent_transactions: BalanceTransaction[];
+}
+
+export interface ChumberRequirement {
+  region: Region;
+  amount: number | null;
+  note: string | null;
+  updated_at: string | null;
 }
 
 export interface GiveawayWinner {

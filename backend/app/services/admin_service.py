@@ -27,6 +27,8 @@ def get_overview(db: Session, region: Region | None) -> OverviewStats:
     total_orders = order_repo.count(region)
 
     total_balance_distributed = txn_repo.sum_admin_recharges(region)
+    total_user_balance = user_repo.sum_balances(region)
+    total_inventory_value = product_repo.sum_inventory_value(region)
 
     recent_orders = order_repo.list_recent(10, region)
     recent_transactions = txn_repo.list_recent(10, region)
@@ -40,6 +42,8 @@ def get_overview(db: Session, region: Region | None) -> OverviewStats:
         out_of_stock_products=out_of_stock_products,
         total_orders=total_orders,
         total_balance_distributed=float(total_balance_distributed),
+        total_user_balance=total_user_balance,
+        total_inventory_value=total_inventory_value,
         recent_orders=[OrderRead.model_validate(o) for o in recent_orders],
         recent_transactions=[BalanceTransactionRead.model_validate(t) for t in recent_transactions],
     )

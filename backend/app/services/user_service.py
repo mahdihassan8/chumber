@@ -7,6 +7,7 @@ from app.core.regions import allowed_regions, assert_can_access, is_super_admin
 from app.core.security import hash_password, verify_password
 from app.models.ai import AIRestockRequest
 from app.models.cart import Cart, CartItem
+from app.models.chumber_requirement import ChumberRequirement
 from app.models.giveaway import GiveawayWinner
 from app.models.order import Order, OrderItem
 from app.models.transaction import BalanceTransaction
@@ -167,6 +168,11 @@ def permanently_delete_user(db: Session, user: User, super_admin: User, confirm_
         # the row, so those users' balance histories stay intact and correct.
         db.query(BalanceTransaction).filter(BalanceTransaction.created_by_id == user.id).update(
             {BalanceTransaction.created_by_id: None}, synchronize_session=False
+        )
+        # Same reasoning: a Chumber Required value this admin set is region
+        # data, not theirs — keep the figure, just blank who last touched it.
+        db.query(ChumberRequirement).filter(ChumberRequirement.updated_by_id == user.id).update(
+            {ChumberRequirement.updated_by_id: None}, synchronize_session=False
         )
 
         db.query(GiveawayWinner).filter(GiveawayWinner.user_id == user.id).delete(synchronize_session=False)

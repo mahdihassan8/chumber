@@ -69,3 +69,13 @@ class ProductRepository(BaseRepository[Product]):
         return (
             self._scoped_count(region).filter((Product.stock_quantity == 0) | (Product.is_active.is_(False))).scalar() or 0
         )
+
+    def sum_inventory_value(self, region: Region | None = None) -> float:
+        """price x stock_quantity summed across every product, active or not
+        — this is the value of stock on hand, not of what's currently
+        orderable. Computed fresh on every call, same as get_sales_map, so it
+        can never drift from the product table."""
+        query = self.db.query(func.sum(Product.price * Product.stock_quantity))
+        if region is not None:
+            query = query.filter(Product.region == region)
+        return float(query.scalar() or 0)

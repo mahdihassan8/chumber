@@ -4,6 +4,7 @@ autogenerate and for `Base.metadata.create_all()` in tests.
 
 from app.models.ai import AIRequestInputType, AIRequestStatus, AIRestockRequest
 from app.models.cart import Cart, CartItem
+from app.models.chumber_requirement import ChumberRequirement
 from app.models.giveaway import Giveaway, GiveawayWinner
 from app.models.order import Order, OrderItem, OrderStatus
 from app.models.product import Product
@@ -18,6 +19,7 @@ __all__ = [
     "AIRestockRequest",
     "Cart",
     "CartItem",
+    "ChumberRequirement",
     "Giveaway",
     "GiveawayWinner",
     "Order",
