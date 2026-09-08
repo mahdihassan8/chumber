@@ -10,6 +10,7 @@ from app.models.cart import Cart, CartItem
 from app.models.chumber_requirement import ChumberRequirement
 from app.models.giveaway import GiveawayWinner
 from app.models.order import Order, OrderItem
+from app.models.total_debt import TotalDebt
 from app.models.transaction import BalanceTransaction
 from app.models.reward import WeeklyReward
 from app.models.user import Region, User, UserRole
@@ -169,10 +170,14 @@ def permanently_delete_user(db: Session, user: User, super_admin: User, confirm_
         db.query(BalanceTransaction).filter(BalanceTransaction.created_by_id == user.id).update(
             {BalanceTransaction.created_by_id: None}, synchronize_session=False
         )
-        # Same reasoning: a Chumber Required value this admin set is region
-        # data, not theirs — keep the figure, just blank who last touched it.
+        # Same reasoning: a Chumber Required / Total Debts value this admin
+        # set is region data, not theirs — keep the figure, just blank who
+        # last touched it.
         db.query(ChumberRequirement).filter(ChumberRequirement.updated_by_id == user.id).update(
             {ChumberRequirement.updated_by_id: None}, synchronize_session=False
+        )
+        db.query(TotalDebt).filter(TotalDebt.updated_by_id == user.id).update(
+            {TotalDebt.updated_by_id: None}, synchronize_session=False
         )
 
         db.query(GiveawayWinner).filter(GiveawayWinner.user_id == user.id).delete(synchronize_session=False)

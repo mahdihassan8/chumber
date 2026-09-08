@@ -4,6 +4,7 @@ import { getOverview } from "@/api/admin";
 import type { OverviewStats } from "@/types";
 import { StatCard } from "@/components/admin/StatCard";
 import { ChumberRequiredCard } from "@/components/admin/ChumberRequiredCard";
+import { TotalDebtsCard } from "@/components/admin/TotalDebtsCard";
 import { OrderList } from "@/components/orders/OrderList";
 import { TransactionList } from "@/components/balance/TransactionList";
 import { ErrorState } from "@/components/common/ErrorState";
@@ -45,7 +46,7 @@ export function OverviewPage() {
   if (!stats) {
     return (
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {Array.from({ length: 10 }).map((_, i) => (
+        {Array.from({ length: 12 }).map((_, i) => (
           <Skeleton key={i} className="h-24 w-full" />
         ))}
       </div>
@@ -65,10 +66,18 @@ export function OverviewPage() {
         <StatCard label="Balance Distributed" value={formatIQD(stats.total_balance_distributed)} icon={<Icon path={ICONS.cash} />} />
         <StatCard label="Total User Money" value={formatIQD(stats.total_user_balance)} icon={<Icon path={ICONS.cash} />} />
         <StatCard label="Total Inventory Value" value={formatIQD(stats.total_inventory_value)} icon={<Icon path={ICONS.box} />} />
+        <StatCard label="Total Debts" value={formatIQD(stats.total_debts)} icon={<Icon path={ICONS.cash} />} />
+        <StatCard
+          label="Balance Difference"
+          value={formatIQD(stats.balance_difference)}
+          icon={<Icon path={ICONS.cash} />}
+          tone={stats.balance_difference < 0 ? "warning" : "default"}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <ChumberRequiredCard />
+        <TotalDebtsCard />
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">

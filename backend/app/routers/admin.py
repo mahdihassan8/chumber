@@ -9,7 +9,8 @@ from app.models.user import User
 from app.schemas.admin import OverviewStats
 from app.schemas.chumber_requirement import ChumberRequirementRead, ChumberRequirementSet
 from app.schemas.order import OrderRead
-from app.services import admin_service, chumber_requirement_service, order_service
+from app.schemas.total_debt import TotalDebtRead, TotalDebtSet
+from app.services import admin_service, chumber_requirement_service, order_service, total_debt_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -62,3 +63,38 @@ def clear_chumber_required(
 ) -> ChumberRequirementRead:
     row = chumber_requirement_service.clear_value(db, region, actor)
     return ChumberRequirementRead.model_validate(row)
+
+
+# --- Total Debts -------------------------------------------------------
+# Same shape and same reasoning as Chumber Required above: a mutable
+# per-region record, edited against one concrete region via get_current_region.
+# Its contribution to the Balance Difference figure in /overview is summed
+# separately (total_debt_service.sum_debts), scoped the same way the other
+# overview totals are.
+
+
+@router.get("/total-debts", response_model=TotalDebtRead)
+def get_total_debts(
+    _: User = Depends(require_admin), region: Region = Depends(get_current_region), db: Session = Depends(get_db)
+) -> TotalDebtRead:
+    row = total_debt_service.get_or_create(db, region)
+    return TotalDebtRead.model_validate(row)
+
+
+@router.put("/total-debts", response_model=TotalDebtRead)
+def set_total_debts(
+    payload: TotalDebtSet,
+    actor: User = Depends(require_admin),
+    region: Region = Depends(get_current_region),
+    db: Session = Depends(get_db),
+) -> TotalDebtRead:
+    row = total_debt_service.set_value(db, region, payload.amount, actor)
+    return TotalDebtRead.model_validate(row)
+
+
+@router.delete("/total-debts", response_model=TotalDebtRead, status_code=status.HTTP_200_OK)
+def clear_total_debts(
+    actor: User = Depends(require_admin), region: Region = Depends(get_current_region), db: Session = Depends(get_db)
+) -> TotalDebtRead:
+    row = total_debt_service.clear_value(db, region, actor)
+    return TotalDebtRead.model_validate(row)

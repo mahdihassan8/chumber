@@ -18,5 +18,10 @@ class OverviewStats(BaseModel):
     # recharge, or stock change.
     total_user_balance: float
     total_inventory_value: float
+    total_debts: float
+    # total_user_balance + total_debts - total_inventory_value. Can be
+    # negative — that's a meaningful signal (inventory outweighs money +
+    # debts), never clamped to zero.
+    balance_difference: float
     recent_orders: list[OrderRead]
     recent_transactions: list[BalanceTransactionRead]
