@@ -24,6 +24,22 @@ class GiveawayRepository(BaseRepository[Giveaway]):
             .first()
         )
 
+    def list_recent(self, limit: int = 20) -> list[Giveaway]:
+        """Most recent giveaways first, for the admin fulfillment view — with
+        the product and every winner (plus who fulfilled them) eager-loaded so
+        rendering the list doesn't N+1."""
+        return (
+            self.db.query(Giveaway)
+            .options(
+                joinedload(Giveaway.product),
+                joinedload(Giveaway.winner_links).joinedload(GiveawayWinner.user),
+                joinedload(Giveaway.winner_links).joinedload(GiveawayWinner.fulfilled_by),
+            )
+            .order_by(Giveaway.scheduled_date.desc())
+            .limit(limit)
+            .all()
+        )
+
 
 class GiveawayWinnerRepository(BaseRepository[GiveawayWinner]):
     model = GiveawayWinner
@@ -37,4 +53,11 @@ class GiveawayWinnerRepository(BaseRepository[GiveawayWinner]):
             .options(joinedload(GiveawayWinner.user))
             .filter(GiveawayWinner.giveaway_id == giveaway_id)
             .all()
+        )
+
+    def get(self, giveaway_id: uuid.UUID, user_id: uuid.UUID) -> GiveawayWinner | None:
+        return (
+            self.db.query(GiveawayWinner)
+            .filter(GiveawayWinner.giveaway_id == giveaway_id, GiveawayWinner.user_id == user_id)
+            .first()
         )

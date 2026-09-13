@@ -177,6 +177,23 @@ export interface GiveawayWinner {
   full_name: string;
 }
 
+export interface AdminGiveawayWinner {
+  user_id: string;
+  username: string;
+  full_name: string;
+  fulfilled_at: string | null;
+  fulfilled_by_username: string | null;
+}
+
+export interface AdminGiveaway {
+  id: string;
+  scheduled_date: string;
+  product_id: string;
+  product_name: string;
+  product_image_url: string | null;
+  winners: AdminGiveawayWinner[];
+}
+
 export interface GiveawayResult {
   /** False when nothing has ever been revealed yet — every field below is
    * meaningless in that case. */

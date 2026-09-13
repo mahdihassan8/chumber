@@ -1,16 +1,19 @@
-from fastapi import APIRouter, Depends, status
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import require_admin
-from app.core.regions import get_admin_scope, get_current_region
+from app.core.regions import can_use, get_admin_scope, get_current_region
 from app.models.user import Region
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.admin import OverviewStats
 from app.schemas.chumber_requirement import ChumberRequirementRead, ChumberRequirementSet
+from app.schemas.giveaway import AdminGiveawayRead, AdminGiveawayWinnerRead, GiveawayFulfillmentUpdate
 from app.schemas.order import OrderRead
 from app.schemas.transfer import TransferRead
-from app.services import admin_service, chumber_requirement_service, order_service, transfer_service
+from app.services import admin_service, chumber_requirement_service, giveaway_service, order_service, transfer_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -71,3 +74,40 @@ def clear_chumber_required(
 ) -> ChumberRequirementRead:
     row = chumber_requirement_service.clear_value(db, region, actor)
     return ChumberRequirementRead.model_validate(row)
+
+
+# --- Giveaway prize fulfillment ---------------------------------------------
+# Najaf-only data, same as the customer-facing GET /api/giveaway — an admin
+# without Najaf membership has no business context for these prizes, so this
+# mirrors that endpoint's can_use guard rather than relying on require_admin
+# alone.
+
+
+def _require_najaf_admin(actor: User) -> None:
+    if not can_use(actor, Region.NAJAF):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to that region")
+
+
+@router.get("/giveaways", response_model=list[AdminGiveawayRead])
+def list_giveaways(actor: User = Depends(require_admin), db: Session = Depends(get_db)) -> list[AdminGiveawayRead]:
+    _require_najaf_admin(actor)
+    return giveaway_service.list_recent_for_admin(db)
+
+
+@router.patch("/giveaways/{giveaway_id}/winners/{user_id}", response_model=AdminGiveawayWinnerRead)
+def set_giveaway_winner_fulfillment(
+    giveaway_id: uuid.UUID,
+    user_id: uuid.UUID,
+    payload: GiveawayFulfillmentUpdate,
+    actor: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminGiveawayWinnerRead:
+    _require_najaf_admin(actor)
+    winner = giveaway_service.set_winner_fulfillment(db, giveaway_id, user_id, actor, payload.fulfilled)
+    return AdminGiveawayWinnerRead(
+        user_id=winner.user_id,
+        username=winner.user.username,
+        full_name=winner.user.full_name,
+        fulfilled_at=winner.fulfilled_at,
+        fulfilled_by_username=winner.fulfilled_by.username if winner.fulfilled_by else None,
+    )

@@ -334,6 +334,78 @@ def test_giveaway_not_generated_when_only_free_products_exist(
     assert response.json()["available"] is False
 
 
+def test_out_of_stock_product_never_selected_as_prize(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch, admin: User
+) -> None:
+    make_user(db, username="stockcand1", password="password123", role=UserRole.CUSTOMER)
+    make_user(db, username="stockcand2", password="password123", role=UserRole.CUSTOMER)
+    make_product(db, name="Sold Out Bait", price=5, stock=0)
+    in_stock = make_product(db, name="Only In-Stock Prize", price=5, stock=10)
+    sunday = _next_occurrence(SUNDAY)
+    _freeze(monkeypatch, _at(sunday, 11, 5))
+
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.get("/api/giveaway", headers=headers)
+    body = response.json()
+    assert body["available"] is True
+    assert body["product_name"] == in_stock.name
+
+
+def test_product_with_stock_below_winner_count_excluded(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch, admin: User
+) -> None:
+    """A single unit isn't enough to give both of the 2 winners a prize, so
+    it must be excluded even though it's active, paid, and technically has
+    stock > 0."""
+    make_user(db, username="stockcand3", password="password123", role=UserRole.CUSTOMER)
+    make_user(db, username="stockcand4", password="password123", role=UserRole.CUSTOMER)
+    make_product(db, name="Barely Any Stock", price=5, stock=1)
+    enough = make_product(db, name="Plenty Of Stock", price=5, stock=2)
+    sunday = _next_occurrence(SUNDAY)
+    _freeze(monkeypatch, _at(sunday, 11, 5))
+
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.get("/api/giveaway", headers=headers)
+    body = response.json()
+    assert body["available"] is True
+    assert body["product_name"] == enough.name
+
+
+def test_giveaway_not_generated_when_no_product_has_enough_stock(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch, admin: User
+) -> None:
+    make_user(db, username="stockcand5", password="password123", role=UserRole.CUSTOMER)
+    make_user(db, username="stockcand6", password="password123", role=UserRole.CUSTOMER)
+    make_product(db, name="Too Little Stock", price=5, stock=1)
+    make_product(db, name="No Stock At All", price=5, stock=0)
+    sunday = _next_occurrence(SUNDAY)
+    _freeze(monkeypatch, _at(sunday, 11, 5))
+
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.get("/api/giveaway", headers=headers)
+    assert response.json()["available"] is False
+
+
+def test_giveaway_draw_reserves_stock_for_both_winners(
+    client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch, admin: User
+) -> None:
+    """The units promised to winners come out of general sellable stock
+    immediately at draw time, so a regular customer can't buy the exact
+    units meant for the winners before the prize is handed over."""
+    make_user(db, username="stockcand7", password="password123", role=UserRole.CUSTOMER)
+    make_user(db, username="stockcand8", password="password123", role=UserRole.CUSTOMER)
+    product = make_product(db, name="Reserved Prize", price=5, stock=10)
+    sunday = _next_occurrence(SUNDAY)
+    _freeze(monkeypatch, _at(sunday, 11, 5))
+
+    headers = auth_headers(client, admin.username, "password123")
+    response = client.get("/api/giveaway", headers=headers)
+    assert response.json()["available"] is True
+
+    db.refresh(product)
+    assert product.stock_quantity == 8
+
+
 def test_two_different_users_get_independently_correct_winner_status(
     client: TestClient, db: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:

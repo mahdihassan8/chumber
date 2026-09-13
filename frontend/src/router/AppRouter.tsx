@@ -23,6 +23,7 @@ import { BalanceManagementPage } from "@/pages/admin/BalanceManagementPage";
 import { OrderManagementPage } from "@/pages/admin/OrderManagementPage";
 import { AIRestockingPage } from "@/pages/admin/AIRestockingPage";
 import { TransferHistoryPage } from "@/pages/admin/TransferHistoryPage";
+import { GiveawayFulfillmentPage } from "@/pages/admin/GiveawayFulfillmentPage";
 
 export function AppRouter() {
   return (
@@ -55,6 +56,7 @@ export function AppRouter() {
               <Route path="orders" element={<OrderManagementPage />} />
               <Route path="ai-restocking" element={<AIRestockingPage />} />
               <Route path="transfers" element={<TransferHistoryPage />} />
+              <Route path="giveaways" element={<GiveawayFulfillmentPage />} />
             </Route>
           </Route>
         </Route>

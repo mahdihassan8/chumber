@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -22,3 +22,24 @@ class GiveawayResultRead(BaseModel):
     # Computed server-side from the caller's authenticated identity — never
     # accepted as input, never derived from anything the client sent.
     is_winner: bool = False
+
+
+class AdminGiveawayWinnerRead(BaseModel):
+    user_id: uuid.UUID
+    username: str
+    full_name: str
+    fulfilled_at: datetime | None
+    fulfilled_by_username: str | None
+
+
+class AdminGiveawayRead(BaseModel):
+    id: uuid.UUID
+    scheduled_date: date
+    product_id: uuid.UUID
+    product_name: str
+    product_image_url: str | None
+    winners: list[AdminGiveawayWinnerRead]
+
+
+class GiveawayFulfillmentUpdate(BaseModel):
+    fulfilled: bool

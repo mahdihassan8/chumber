@@ -34,10 +34,17 @@ class ProductRepository(BaseRepository[Product]):
     def list_active(self, region: Region | None = None) -> list[Product]:
         return self._scoped(region).filter(Product.is_active.is_(True)).all()
 
-    def list_giveaway_eligible(self, region: Region | None = None) -> list[Product]:
+    def list_giveaway_eligible(self, region: Region | None = None, min_stock: int = 1) -> list[Product]:
         """Active products excluding Free (price 0) ones — a Free item is
-        already free, so it can't be offered as a giveaway prize."""
-        return self._scoped(region).filter(Product.is_active.is_(True), Product.price > 0).all()
+        already free, so it can't be offered as a giveaway prize. `min_stock`
+        excludes anything that doesn't have enough units on hand to cover
+        every winner (the caller passes the winner count) — a product can't
+        be promised as a prize it can't actually deliver."""
+        return (
+            self._scoped(region)
+            .filter(Product.is_active.is_(True), Product.price > 0, Product.stock_quantity >= min_stock)
+            .all()
+        )
 
     def get_locked_map(self, product_ids: list[uuid.UUID]) -> dict[uuid.UUID, Product]:
         """SELECT ... FOR UPDATE with populate_existing for every product in

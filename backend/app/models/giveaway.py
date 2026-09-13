@@ -32,8 +32,16 @@ class GiveawayWinner(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     giveaway_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("giveaways.id"), nullable=False)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    # Null until an admin actually hands the prize over — lets the dashboard
+    # show which past winners are still owed a prize instead of relying on
+    # tribal knowledge.
+    fulfilled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fulfilled_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
 
     giveaway: Mapped["Giveaway"] = relationship("Giveaway", back_populates="winner_links")
-    user: Mapped["User"] = relationship("User")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    fulfilled_by: Mapped["User | None"] = relationship("User", foreign_keys=[fulfilled_by_admin_id])
 
     __table_args__ = (UniqueConstraint("giveaway_id", "user_id", name="uq_giveaway_winner_user"),)
