@@ -6,6 +6,7 @@ import { FreeBadge } from "@/components/product/FreeBadge";
 import { QuantitySelector } from "@/components/product/QuantitySelector";
 import { Button } from "@/components/common/Button";
 import { BeansAmount } from "@/components/common/BeansAmount";
+import { resolveAssetUrl } from "@/utils/assets";
 import { useCart } from "@/context/CartContext";
 
 export function ProductCard({ product }: { product: Product }) {
@@ -16,6 +17,10 @@ export function ProductCard({ product }: { product: Product }) {
   // actually in stock right now.
   const quantity = Math.min(getSelectedQuantity(product.id), product.stock_quantity) || 1;
   const isMutating = mutatingItemId === product.id;
+  // Rendered directly rather than through ProductImage: that component's
+  // no-image fallback is a fixed h-10 svg, which would overflow a box this
+  // small. Without an image the number just stands alone.
+  const stockIcon = resolveAssetUrl(product.image_url);
 
   const handleAdd = async () => {
     await addItem(product.id, quantity);
@@ -37,10 +42,16 @@ export function ProductCard({ product }: { product: Product }) {
           </Link>
         </div>
         <p className="line-clamp-2 flex-1 text-sm text-zinc-500">{product.description}</p>
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-lg font-bold text-zinc-900">
-            <BeansAmount amount={product.price} />
-          </span>
+        <div className="flex items-start justify-between pt-1">
+          <div>
+            <span className="text-lg font-bold text-zinc-900">
+              <BeansAmount amount={product.price} />
+            </span>
+            <p className="flex items-center gap-1 text-sm text-zinc-500">
+              {stockIcon && <img src={stockIcon} alt="" className="h-[1.1em] w-[1.1em] shrink-0 object-contain" />}
+              {product.stock_quantity}
+            </p>
+          </div>
           <div className="flex items-center gap-1.5">
             {product.is_free && <FreeBadge />}
             <StockBadge stock={product.stock_quantity} isAvailable={product.is_available} />
