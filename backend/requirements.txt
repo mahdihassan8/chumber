@@ -10,6 +10,7 @@ python-jose[cryptography]==3.3.0
 bcrypt==4.2.1
 python-multipart==0.0.20
 google-genai==2.20.0
+pillow==11.1.0
 tzdata==2024.2
 pytest==8.3.4
 httpx==0.28.1

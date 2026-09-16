@@ -177,6 +177,28 @@ export interface GiveawayWinner {
   full_name: string;
 }
 
+export type AIDraftStatus = "pending" | "confirmed" | "rejected" | "failed";
+
+export interface AIProductDraft {
+  id: string;
+  requested_name: string;
+  source_url: string | null;
+  source_title: string | null;
+  extracted_name: string | null;
+  extracted_description: string | null;
+  /** IQD, like every money field in the API. */
+  suggested_price: number | null;
+  image_prompt: string | null;
+  staged_image_url: string | null;
+  /** False when the cut-out did not actually produce an alpha channel — the
+   * image is still usable, it just isn't transparent. */
+  has_transparency: boolean;
+  status: AIDraftStatus;
+  error_message: string | null;
+  created_product_id: string | null;
+  created_at: string;
+}
+
 export interface AdminGiveawayWinner {
   user_id: string;
   username: string;

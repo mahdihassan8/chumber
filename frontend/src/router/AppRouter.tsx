@@ -24,6 +24,7 @@ import { OrderManagementPage } from "@/pages/admin/OrderManagementPage";
 import { AIRestockingPage } from "@/pages/admin/AIRestockingPage";
 import { TransferHistoryPage } from "@/pages/admin/TransferHistoryPage";
 import { GiveawayFulfillmentPage } from "@/pages/admin/GiveawayFulfillmentPage";
+import { AIProductCreatePage } from "@/pages/admin/AIProductCreatePage";
 
 export function AppRouter() {
   return (
@@ -57,6 +58,7 @@ export function AppRouter() {
               <Route path="ai-restocking" element={<AIRestockingPage />} />
               <Route path="transfers" element={<TransferHistoryPage />} />
               <Route path="giveaways" element={<GiveawayFulfillmentPage />} />
+              <Route path="ai-products" element={<AIProductCreatePage />} />
             </Route>
           </Route>
         </Route>

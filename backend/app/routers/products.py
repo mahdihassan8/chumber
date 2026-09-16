@@ -1,5 +1,4 @@
 import uuid
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy.exc import IntegrityError
@@ -12,12 +11,9 @@ from app.db.session import get_db
 from app.models.user import User, UserRole
 from app.schemas.product import ProductCreate, ProductRead, ProductRestock, ProductUpdate
 from app.services import product_service
+from app.services.product_image_service import ALLOWED_CONTENT_TYPES, MAX_UPLOAD_BYTES, save_image
 
 router = APIRouter(prefix="/api/products", tags=["products"])
-
-UPLOAD_DIR = Path(__file__).resolve().parent.parent / "static" / "uploads" / "products"
-ALLOWED_CONTENT_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
-MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 
 @router.get("", response_model=list[ProductRead])
@@ -93,12 +89,7 @@ async def upload_product_image(
     if len(contents) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 5MB)")
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    extension = ALLOWED_CONTENT_TYPES[file.content_type]
-    filename = f"{product.id}-{uuid.uuid4().hex[:8]}{extension}"
-    (UPLOAD_DIR / filename).write_bytes(contents)
-
-    product.image_url = f"/uploads/products/{filename}"
+    product.image_url = save_image(product.id, contents, ALLOWED_CONTENT_TYPES[file.content_type])
     db.commit()
     db.refresh(product)
     return ProductRead.model_validate(product)
