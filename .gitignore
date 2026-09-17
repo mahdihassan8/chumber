@@ -14,6 +14,10 @@ dist/
 # Env
 .env
 .env.local
+# Production secrets live only on the server; this makes sure a local copy
+# can never be committed by accident.
+.env.prod
+*.env.prod
 
 # Uploads
 backend/app/static/uploads/*

@@ -10,7 +10,15 @@ python-jose[cryptography]==3.3.0
 bcrypt==4.2.1
 python-multipart==0.0.20
 google-genai==2.20.0
-pillow==11.1.0
+# pillow is pinned to what rembg resolves to; an older pin gets silently
+# upgraded during the rembg install and the build stops being reproducible.
+pillow==12.3.0
+# Local, offline background removal for AI product creation. Free and
+# quota-less, unlike the Gemini image models, which are not on the free tier.
+# See REMBG_MODEL in ai_product_service: the default model is deliberately
+# overridden with u2net.
+rembg==2.0.84
+onnxruntime==1.30.0
 tzdata==2024.2
 pytest==8.3.4
 httpx==0.28.1

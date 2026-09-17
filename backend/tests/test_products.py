@@ -169,3 +169,63 @@ def test_product_list_ranking_updates_after_sale_shifts_it_to_top(client: TestCl
     _buy(client, buyer_headers, str(challenger.id), 20)
     names = [p["name"] for p in client.get("/api/products", headers=admin_headers).json()]
     assert names[0] == "Challenger"
+
+
+# ---------------------------------------------------------------------------
+# Manual admin image upload — the path AI product creation falls back to when
+# no image could be found automatically. Both now share
+# product_image_service.save_image, so this guards that refactor too.
+# ---------------------------------------------------------------------------
+
+
+def _png(colour: tuple[int, int, int] = (10, 120, 200)) -> bytes:
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (16, 16), colour).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def test_admin_can_still_upload_a_product_image(client: TestClient, db: Session, admin: User, tmp_path) -> None:  # noqa: ANN001
+    from app.services import product_image_service
+
+    product_image_service.UPLOAD_DIR = tmp_path / "products"
+    product = make_product(db, name="Uploadable")
+    headers = auth_headers(client, admin.username, "password123")
+
+    response = client.post(
+        f"/api/products/{product.id}/image",
+        files={"file": ("shot.png", _png(), "image/png")},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["image_url"].startswith("/uploads/products/")
+    db.refresh(product)
+    assert product.image_url == body["image_url"]
+    # The bytes really landed on disk under a server-generated name.
+    assert (tmp_path / "products").exists()
+    assert len(list((tmp_path / "products").iterdir())) == 1
+
+
+def test_upload_rejects_a_non_image_content_type(client: TestClient, db: Session, admin: User) -> None:
+    product = make_product(db, name="Rejecting")
+    response = client.post(
+        f"/api/products/{product.id}/image",
+        files={"file": ("payload.sh", b"#!/bin/sh\nrm -rf /", "application/x-sh")},
+        headers=auth_headers(client, admin.username, "password123"),
+    )
+    assert response.status_code == 400
+
+
+def test_customer_cannot_upload_a_product_image(client: TestClient, db: Session, customer: User) -> None:
+    product = make_product(db, name="Protected")
+    response = client.post(
+        f"/api/products/{product.id}/image",
+        files={"file": ("shot.png", _png(), "image/png")},
+        headers=auth_headers(client, customer.username, "password123"),
+    )
+    assert response.status_code == 403

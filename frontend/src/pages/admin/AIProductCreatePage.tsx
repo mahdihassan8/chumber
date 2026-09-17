@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { confirmAIProduct, draftAIProduct, rejectAIProduct } from "@/api/ai";
+import { confirmAIProduct, draftAIProduct, rejectAIProduct, retryAIProductImage } from "@/api/ai";
 import type { AIProductDraft } from "@/types";
 import { Badge } from "@/components/common/Badge";
 import { Button } from "@/components/common/Button";
@@ -15,11 +15,38 @@ import { ApiRequestError } from "@/api/client";
 const CHECKERBOARD =
   "repeating-conic-gradient(#e4e4e7 0% 25%, #fafafa 0% 50%) 50% / 16px 16px";
 
+/** Advanced on a timer rather than from real backend events: the draft call is
+ * a single request, so these are an honest description of the stages the
+ * server goes through, not a live progress feed. The final state always comes
+ * from the response. */
+const PROGRESS_STEPS = [
+  "Looking up the product…",
+  "Searching for a real product image…",
+  "Applying the GTA style…",
+  "Removing the background…",
+  "Uploading the image…",
+];
+const STEP_MS = 2500;
+
+/** What the admin is told for each image outcome. Only "ok" means an image was
+ * stored — every other state says so plainly rather than implying one exists. */
+const IMAGE_STATUS_TEXT: Record<string, { label: string; tone: "green" | "amber" | "zinc" }> = {
+  ok: { label: "Image ready", tone: "green" },
+  not_configured: { label: "Image search not configured", tone: "zinc" },
+  search_failed: { label: "Image search failed", tone: "amber" },
+  no_results: { label: "No product image found", tone: "amber" },
+  fetch_failed: { label: "Found images could not be downloaded", tone: "amber" },
+  processing_failed: { label: "Image processing failed", tone: "amber" },
+  not_attempted: { label: "No image", tone: "zinc" },
+};
+
 export function AIProductCreatePage() {
   const [name, setName] = useState("");
   const [draft, setDraft] = useState<AIProductDraft | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [progressStep, setProgressStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   // Admin-editable review fields, seeded from what the AI extracted.
@@ -36,6 +63,13 @@ export function AIProductCreatePage() {
     setIsSearching(true);
     setError(null);
     setDraft(null);
+    setProgressStep(0);
+    // Stops short of the last step so it never claims to have finished before
+    // the response actually lands.
+    const ticker = setInterval(
+      () => setProgressStep((s) => Math.min(s + 1, PROGRESS_STEPS.length - 1)),
+      STEP_MS
+    );
     try {
       const result = await draftAIProduct(name.trim());
       setDraft(result);
@@ -50,7 +84,22 @@ export function AIProductCreatePage() {
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Could not reach the AI assistant");
     } finally {
+      clearInterval(ticker);
       setIsSearching(false);
+    }
+  };
+
+  const retryImage = async () => {
+    if (!draft) return;
+    setIsRetrying(true);
+    try {
+      const updated = await retryAIProductImage(draft.id);
+      setDraft(updated);
+      showToast(updated.image_status === "ok" ? "Image ready" : "Still no usable image", updated.image_status === "ok" ? "success" : "error");
+    } catch (err) {
+      showToast(err instanceof ApiRequestError ? err.message : "Could not retry the image", "error");
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -116,7 +165,14 @@ export function AIProductCreatePage() {
       {isSearching && (
         <div className="space-y-4">
           <Skeleton className="h-64 w-full" />
-          <p className="text-center text-sm text-zinc-500">Searching the web, fetching the image and removing its background…</p>
+          <ol className="space-y-1.5 text-center text-sm text-zinc-500">
+            {PROGRESS_STEPS.map((label, i) => (
+              <li key={label} className={i === progressStep ? "font-medium text-zinc-900" : ""}>
+                {i < progressStep ? "✓ " : ""}
+                {label}
+              </li>
+            ))}
+          </ol>
         </div>
       )}
 
@@ -127,9 +183,24 @@ export function AIProductCreatePage() {
           <div className="card p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-zinc-900">Review before saving</p>
-              <Badge color={draft.has_transparency ? "green" : "amber"}>
-                {draft.has_transparency ? "Transparent PNG" : "No transparency — background kept"}
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge color={IMAGE_STATUS_TEXT[draft.image_status]?.tone ?? "zinc"}>
+                  {IMAGE_STATUS_TEXT[draft.image_status]?.label ?? draft.image_status}
+                </Badge>
+                {draft.image_status === "ok" && !draft.has_transparency && (
+                  <Badge color="amber">Background kept</Badge>
+                )}
+                {draft.image_status !== "ok" && (
+                  <Button
+                    variant="ghost"
+                    className="px-2.5 py-1 text-xs"
+                    isLoading={isRetrying}
+                    onClick={retryImage}
+                  >
+                    Retry image
+                  </Button>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-col gap-5 sm:flex-row">
@@ -146,10 +217,13 @@ export function AIProductCreatePage() {
                     No image
                   </div>
                 )}
-                {draft.source_title && (
-                  <p className="mt-2 max-w-40 truncate text-xs text-zinc-400" title={draft.source_url ?? undefined}>
-                    Source: {draft.source_title}
+                {draft.source_url && (
+                  <p className="mt-2 max-w-40 truncate text-xs text-zinc-400" title={draft.source_url}>
+                    Source: {draft.source_title || new URL(draft.source_url).hostname}
                   </p>
+                )}
+                {draft.image_error && (
+                  <p className="mt-1 max-w-40 text-xs text-amber-700">{draft.image_error}</p>
                 )}
               </div>
 

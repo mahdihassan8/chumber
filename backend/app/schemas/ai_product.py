@@ -23,6 +23,10 @@ class AIProductDraftRead(BaseModel):
     image_prompt: str | None
     staged_image_url: str | None
     has_transparency: bool
+    # See ImageStatus in services/ai_product_service: "ok" is the only value
+    # that means an image was actually stored.
+    image_status: str
+    image_error: str | None
     status: AIRequestStatus
     error_message: str | None
     created_product_id: uuid.UUID | None

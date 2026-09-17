@@ -42,8 +42,15 @@ class AIProductDraft(Base):
     # product's image_url — no second copy, no re-upload.
     staged_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Whether the processed image actually carries an alpha channel, rather
-    # than the model having quietly returned an opaque picture.
+    # than background removal having quietly returned an opaque picture.
     has_transparency: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # How the image pipeline actually ended. Plain text rather than a database
+    # enum: these are reporting states that will change as the pipeline does,
+    # and a Postgres enum would need a migration for every new one.
+    # See ImageStatus in services/ai_product_service.
+    image_status: Mapped[str] = mapped_column(String(30), default="not_attempted", nullable=False)
+    image_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     status: Mapped[AIRequestStatus] = mapped_column(
         Enum(AIRequestStatus, name="ai_request_status"), default=AIRequestStatus.PENDING, nullable=False

@@ -1,9 +1,10 @@
 """AI-assisted product creation: research -> image -> admin review -> create.
 
-Mirrors the restock assistant's contract deliberately (services/ai_service.py):
-the AI only ever *proposes*. A draft row is written, the admin sees exactly
-what was found, and nothing becomes a Product until confirm_draft runs the
-ordinary product_service.create_product path.
+Gemini is the only provider, and only its free tier is used. Mirrors the
+restock assistant's contract deliberately (services/ai_service.py): the AI only
+ever *proposes*. A draft row is written, the admin sees exactly what was found,
+and nothing becomes a Product until confirm_draft runs the ordinary
+product_service.create_product path.
 
 Model selection is kept local to this module rather than imported from
 ai_service, because that module's model list differs between the main branch
@@ -12,15 +13,16 @@ a service that only imports cleanly on one of them.
 """
 
 import io
-import json
-import re
+import threading
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from google import genai
 from google.genai import types
 from PIL import Image
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -32,40 +34,43 @@ from app.schemas.ai_product import AIProductDraftConfirm
 from app.schemas.product import ProductCreate
 from app.services import product_service
 from app.services.image_fetch_service import fetch_image
+from app.services.product_image_search_service import ImageSearchUnavailable, search_product_images
 from app.services.product_image_service import save_image
+from app.services.product_image_style_service import apply_gta_style
 
-# Each model carries its own free-tier daily budget, so an exhausted one does
-# not mean an exhausted key — fall through instead of failing the admin.
+# Free-tier text models only. Each carries its own free daily budget, so one
+# being exhausted does not mean the key is — falling through to a sibling is
+# still entirely within the free tier. Nothing here is a paid model, and there
+# is deliberately no paid fallback: when every one of these is exhausted the
+# draft fails with a clear message instead.
+#
+# Two Gemini features this feature used to rely on are NOT available on the
+# free tier — both return 429 on every call regardless of model:
+#   * google_search grounding (live web search)
+#   * the image generation/editing models (nano-banana family)
+# So research runs on plain generation with structured output, and background
+# removal runs locally through rembg rather than an image model.
 TEXT_MODELS = ("gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-lite-latest")
-IMAGE_MODELS = ("gemini-3.1-flash-image", "gemini-2.5-flash-image", "gemini-3-pro-image")
 TIMEOUT_MS = 90_000
 MAX_IMAGE_DIMENSION = 1024
 
 RESEARCH_PROMPT = """You are helping an admin add a product to a small private marketplace.
 
-Search the web for the product named below and reply with ONLY a JSON object
-(no prose, no code fence) with exactly these keys:
+Describe the product named below from your own knowledge.
 
-  "product_name":   the canonical retail name
-  "description":    one or two factual sentences about the product
-  "image_url":      a direct link to a product photo (must end in .jpg/.jpeg/.png/.webp
-                    and be a real image file, not an HTML page)
-  "source_title":   the site or page the photo came from
-  "suggested_price_iqd": a number, the approximate retail price in Iraqi Dinar
-  "image_prompt":   an image-generation prompt that would render this product in the
-                    style of Grand Theft Auto cover art: bold saturated colours, heavy
-                    black outlines, cel-shaded comic realism, dramatic lighting,
-                    isolated product on a plain background
+For image_url, give a direct link to a product photo only if you are confident the
+URL is real and still reachable; otherwise leave it as an empty string. Never invent
+a plausible-looking URL.
+
+For image_prompt, write an image-generation prompt that would render this product in
+the style of Grand Theft Auto cover art: bold saturated colours, heavy black
+outlines, cel-shaded comic realism, dramatic lighting, isolated product on a plain
+background.
+
+suggested_price_iqd is the approximate retail price in Iraqi Dinar, as a number.
 
 Product name: {name}
 """
-
-BACKGROUND_REMOVAL_PROMPT = (
-    "Remove the background from this product photo completely. Return the product "
-    "isolated on a fully transparent background as a PNG with an alpha channel. "
-    "Keep the product itself unchanged and uncropped. No backdrop, no shadow, no "
-    "surface, no added text."
-)
 
 
 def _client() -> genai.Client:
@@ -82,104 +87,129 @@ def _failed(db: Session, admin: User, name: str, message: str) -> AIProductDraft
     return draft
 
 
-def _extract_json(text: str) -> dict | None:
-    """Tolerant JSON extraction.
+class _ProductResearch(BaseModel):
+    """Structured output schema.
 
-    The research call cannot use response_schema, because structured output
-    and the google_search tool can't be requested together — so the model
-    replies with JSON in prose, and may still wrap it in a code fence despite
-    being asked not to.
+    Usable now only because the google_search tool is gone — Gemini rejects a
+    response_schema and a tool in the same request, which is why this used to
+    be parsed leniently out of prose.
     """
-    if not text:
-        return None
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-    candidate = fenced.group(1) if fenced else None
-    if candidate is None:
-        braces = re.search(r"\{.*\}", text, re.DOTALL)
-        candidate = braces.group(0) if braces else None
-    if candidate is None:
-        return None
-    try:
-        parsed = json.loads(candidate)
-    except json.JSONDecodeError:
-        return None
-    return parsed if isinstance(parsed, dict) else None
+
+    product_name: str
+    description: str
+    image_url: str = ""
+    source_title: str = ""
+    suggested_price_iqd: float = 0
+    image_prompt: str = ""
 
 
-def _research(name: str) -> tuple[dict | None, str | None]:
-    """Grounded web lookup. Returns (data, error_message)."""
+def _is_quota_error(exc: Exception) -> bool:
+    text = str(exc)
+    return "RESOURCE_EXHAUSTED" in text or "429" in text
+
+
+def _research(name: str) -> tuple[_ProductResearch | None, str | None]:
+    """Product lookup from the model's own knowledge. Returns (data, error).
+
+    No web search: grounding is a billed feature, and this must stay inside
+    the free tier.
+    """
     client = _client()
-    last_error = "AI research failed"
+    last_error = "AI research failed."
+    all_quota_exhausted = True
+
     for model in TEXT_MODELS:
         try:
             response = client.models.generate_content(
                 model=model,
                 contents=RESEARCH_PROMPT.format(name=name),
-                config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())]),
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", response_schema=_ProductResearch
+                ),
             )
         except Exception as exc:  # noqa: BLE001
-            last_error = f"{type(exc).__name__}: {exc}"
+            if not _is_quota_error(exc):
+                all_quota_exhausted = False
+                last_error = f"{type(exc).__name__}: {exc}"
             continue
 
-        data = _extract_json(response.text or "")
-        if data is None:
+        parsed = response.parsed
+        if parsed is None:
+            all_quota_exhausted = False
             last_error = "The AI did not return usable product details."
             continue
-        return data, None
+        return parsed, None
+
+    if all_quota_exhausted:
+        # Deliberately a dead end: the free tier is the only tier this feature
+        # uses, so there is nothing to fall back to and nothing is retried
+        # against a paid model.
+        return None, (
+            "Gemini free-tier quota is exhausted for today. The daily limit is per model and resets "
+            "every 24 hours — try again tomorrow. No paid model was used."
+        )
     return None, last_error
 
 
+# u2net is pinned deliberately rather than taking rembg's default.
+#
+# The current default is BRIA RMBG 2.0: a 1.02 GB model whose inference was
+# OOM-killed (exit 137) with 3.8 GB free, and which is licensed for
+# non-commercial use only — both disqualifying for a 4 GB box running a
+# marketplace. u2net is ~176 MB, permissively licensed, and verified to cut
+# out cleanly here.
+REMBG_MODEL = "u2net"
+_rembg_session = None
+
+# Measured on this codebase: loading u2net and running one 800x800 inference
+# peaks around 916 MB RSS. Two at once would be ~1.8 GB on a 4 GB host that is
+# also running Postgres, so inference is serialised. FastAPI runs sync
+# endpoints in a threadpool, which means without this guard two admins clicking
+# at once really could overlap.
+_rembg_lock = threading.Semaphore(1)
+REMBG_WAIT_SECONDS = 60
+
+
+def _get_rembg_session():  # noqa: ANN202
+    """Loads the model once per process. Building a session per call would
+    re-read the whole model off disk every time."""
+    global _rembg_session
+    if _rembg_session is None:
+        from rembg import new_session
+
+        _rembg_session = new_session(REMBG_MODEL)
+    return _rembg_session
+
+
 def _to_transparent_png(source_png: bytes) -> tuple[bytes, bool, str | None]:
-    """Asks an image model to strip the background.
+    """Strips the background locally with rembg.
 
-    `source_png` must already be PNG — callers normalize first, so the
-    mime_type sent here is always truthful regardless of what format the
-    remote site actually served.
+    Local and free on purpose: the Gemini image models that could do this are
+    not available on the free tier, and this runs offline with no quota and no
+    per-call cost.
 
-    Returns (png_bytes, has_real_transparency, error). Falls back to the
-    unmodified source when no model can be reached, so the admin still gets
-    something to look at and `has_transparency` tells them honestly that the
-    cut-out did not happen.
+    Returns (png_bytes, has_real_transparency, error). If rembg is unavailable
+    or fails — including being OOM-killed on a small host — the original image
+    is kept and has_transparency reports False rather than a cut-out being
+    faked: the admin sees the truth on the review screen and can still create
+    the product.
     """
-    client = _client()
-    last_error = None
-    for model in IMAGE_MODELS:
-        try:
-            response = client.models.generate_content(
-                model=model,
-                contents=[
-                    types.Part.from_bytes(data=source_png, mime_type="image/png"),
-                    types.Part.from_text(text=BACKGROUND_REMOVAL_PROMPT),
-                ],
-                config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
-            )
-        except Exception as exc:  # noqa: BLE001
-            last_error = f"{type(exc).__name__}: {exc}"
-            continue
+    if not _rembg_lock.acquire(timeout=REMBG_WAIT_SECONDS):
+        png, has_alpha = _normalize_png(source_png)
+        return png, has_alpha, "Background removal is busy; the image was kept with its background."
 
-        for part in _image_parts(response):
-            png, has_alpha = _normalize_png(part)
-            return png, has_alpha, None
-        last_error = "The image model returned no image."
+    try:
+        from rembg import remove  # imported lazily: heavy, and only this path needs it
 
-    png, has_alpha = _normalize_png(source_png)
-    return png, has_alpha, last_error or "Background removal was unavailable."
+        cut_out = remove(source_png, session=_get_rembg_session())
+    except Exception as exc:  # noqa: BLE001
+        png, has_alpha = _normalize_png(source_png)
+        return png, has_alpha, f"Background removal unavailable ({type(exc).__name__})."
+    finally:
+        _rembg_lock.release()
 
-
-def _image_parts(response: object) -> list[bytes]:
-    """Every inline image in a response, defensively — a blocked or empty
-    candidate must degrade to 'no image', not raise."""
-    candidates = getattr(response, "candidates", None) or []
-    if not candidates:
-        return []
-    content = getattr(candidates[0], "content", None)
-    parts = getattr(content, "parts", None) or []
-    images = []
-    for part in parts:
-        inline = getattr(part, "inline_data", None)
-        if inline and inline.data:
-            images.append(inline.data)
-    return images
+    png, has_alpha = _normalize_png(cut_out)
+    return png, has_alpha, None
 
 
 def _normalize_png(data: bytes) -> tuple[bytes, bool]:
@@ -194,6 +224,108 @@ def _normalize_png(data: bytes) -> tuple[bytes, bool]:
     return buffer.getvalue(), min_alpha < 255
 
 
+class ImageStatus:
+    """Reporting states for the image pipeline. `OK` is the only one that means
+    a usable image was stored; every other value leaves staged_image_url None
+    so nothing can mistake a failure for a finished image."""
+
+    OK = "ok"
+    NOT_CONFIGURED = "not_configured"
+    SEARCH_FAILED = "search_failed"
+    NO_RESULTS = "no_results"
+    FETCH_FAILED = "fetch_failed"
+    PROCESSING_FAILED = "processing_failed"
+
+
+@dataclass
+class ImageOutcome:
+    status: str
+    staged_image_url: str | None = None
+    source_url: str | None = None
+    has_transparency: bool = False
+    error: str | None = None
+
+
+def build_product_image(draft_id: uuid.UUID, name: str, description: str) -> ImageOutcome:
+    """Find a real product photo, style it, cut it out, store it.
+
+    Deliberately never generates a picture from text: the brief requires the
+    *actual* product's packaging, and a generated stand-in would be a different
+    product wearing the right name. If no real photo can be found, this reports
+    that plainly and stores nothing.
+
+    Never raises — the caller must still get a reviewable draft.
+    """
+    try:
+        candidates = search_product_images(name, description)
+    except ImageSearchUnavailable as exc:
+        status = ImageStatus.NOT_CONFIGURED if not settings.image_search_configured else ImageStatus.SEARCH_FAILED
+        return ImageOutcome(status=status, error=str(exc)[:500])
+
+    if not candidates:
+        return ImageOutcome(status=ImageStatus.NO_RESULTS, error="No product image was found for this name.")
+
+    # Walk the candidates: the top hit is often a hotlink-protected CDN or an
+    # HTML page wearing an image extension, and the SSRF/format checks in
+    # fetch_image reject those. Trying the next one costs nothing.
+    last_error = None
+    for url in candidates:
+        try:
+            source_bytes, _ = fetch_image(url)
+        except HTTPException as exc:
+            last_error = str(exc.detail)
+            continue
+
+        try:
+            canonical_png, _ = _normalize_png(source_bytes)
+            styled = apply_gta_style(canonical_png)
+            final_png, has_transparency, removal_error = _to_transparent_png(styled)
+            # Staged under the draft's own id: written before any Product
+            # exists, and on confirm this exact path becomes the product's
+            # image_url rather than being copied again.
+            staged_url = save_image(draft_id, final_png, ".png")
+        except Exception as exc:  # noqa: BLE001
+            return ImageOutcome(
+                status=ImageStatus.PROCESSING_FAILED,
+                source_url=url[:1000],
+                error=f"Image processing failed: {type(exc).__name__}"[:500],
+            )
+
+        return ImageOutcome(
+            status=ImageStatus.OK,
+            staged_image_url=staged_url,
+            source_url=url[:1000],
+            has_transparency=has_transparency,
+            # A cut-out that silently didn't happen is still worth surfacing.
+            error=removal_error[:500] if removal_error else None,
+        )
+
+    return ImageOutcome(
+        status=ImageStatus.FETCH_FAILED,
+        error=f"No candidate image could be downloaded. Last reason: {last_error}"[:500],
+    )
+
+
+def retry_image(db: Session, draft_id: uuid.UUID) -> AIProductDraft:
+    """Re-runs only the image pipeline for a pending draft, leaving the
+    already-reviewed product details alone."""
+    draft = AIProductDraftRepository(db).get_by_id(draft_id)
+    if draft is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product draft not found")
+    if draft.status != AIRequestStatus.PENDING:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Draft is not pending")
+
+    outcome = build_product_image(draft.id, draft.extracted_name or draft.requested_name, draft.extracted_description or "")
+    draft.staged_image_url = outcome.staged_image_url
+    draft.source_url = outcome.source_url
+    draft.has_transparency = outcome.has_transparency
+    draft.image_status = outcome.status
+    draft.image_error = outcome.error
+    db.commit()
+    db.refresh(draft)
+    return draft
+
+
 def create_draft(db: Session, admin: User, name: str) -> AIProductDraft:
     name = name.strip()
     if not settings.gemini_api_key:
@@ -203,42 +335,23 @@ def create_draft(db: Session, admin: User, name: str) -> AIProductDraft:
     if data is None:
         return _failed(db, admin, name, error or "AI research failed.")
 
-    image_url = str(data.get("image_url") or "").strip()
-    if not image_url:
-        return _failed(db, admin, name, "The AI did not find a product image.")
-
-    try:
-        source_bytes, _ = fetch_image(image_url)
-    except HTTPException as exc:
-        return _failed(db, admin, name, f"Could not use the found image: {exc.detail}")
-
-    try:
-        # Normalize to PNG before handing it to the image model, so what we
-        # claim as image/png always is one whatever the site served.
-        canonical_png, _ = _normalize_png(source_bytes)
-        png_bytes, has_transparency, _ = _to_transparent_png(canonical_png)
-    except Exception as exc:  # noqa: BLE001
-        return _failed(db, admin, name, f"Image processing failed: {exc}")
-
     draft_id = uuid.uuid4()
-    # Staged under the draft's own id: the file is written before any Product
-    # exists, and on confirm this exact path becomes the product's image_url
-    # rather than being copied again.
-    staged_url = save_image(draft_id, png_bytes, ".png")
+    outcome = build_product_image(draft_id, data.product_name or name, data.description)
 
-    price = data.get("suggested_price_iqd")
     draft = AIProductDraft(
         id=draft_id,
         admin_id=admin.id,
         requested_name=name,
-        source_url=image_url[:1000],
-        source_title=str(data.get("source_title") or "")[:500] or None,
-        extracted_name=str(data.get("product_name") or name)[:200],
-        extracted_description=str(data.get("description") or ""),
-        suggested_price=float(price) if isinstance(price, (int, float)) else None,
-        image_prompt=str(data.get("image_prompt") or ""),
-        staged_image_url=staged_url,
-        has_transparency=has_transparency,
+        source_url=outcome.source_url,
+        source_title=data.source_title[:500] or None,
+        extracted_name=(data.product_name or name)[:200],
+        extracted_description=data.description,
+        suggested_price=data.suggested_price_iqd or None,
+        image_prompt=data.image_prompt,
+        staged_image_url=outcome.staged_image_url,
+        has_transparency=outcome.has_transparency,
+        image_status=outcome.status,
+        image_error=outcome.error,
         status=AIRequestStatus.PENDING,
     )
     AIProductDraftRepository(db).add(draft)

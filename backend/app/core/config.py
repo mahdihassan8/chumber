@@ -22,6 +22,18 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
 
+    # Google Programmable Search (Custom Search JSON API), used to find a real
+    # product photo to style. Free tier is 100 queries/day. Both are blank by
+    # default and the feature degrades to "no image found" without them —
+    # Gemini's own google_search grounding is not available on the free tier,
+    # so this is the only free way to reach a real image.
+    google_cse_api_key: str = ""
+    google_cse_id: str = ""
+
+    @property
+    def image_search_configured(self) -> bool:
+        return bool(self.google_cse_api_key and self.google_cse_id)
+
     bootstrap_admin_username: str = "mooane"
     bootstrap_admin_email: str = "admin@stchumber.com"
     # Same reasoning as jwt_secret_key above: no hardcoded fallback password.

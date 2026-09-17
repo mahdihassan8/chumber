@@ -193,6 +193,16 @@ export interface AIProductDraft {
   /** False when the cut-out did not actually produce an alpha channel — the
    * image is still usable, it just isn't transparent. */
   has_transparency: boolean;
+  /** "ok" is the only value meaning an image was actually stored. */
+  image_status:
+    | "ok"
+    | "not_configured"
+    | "search_failed"
+    | "no_results"
+    | "fetch_failed"
+    | "processing_failed"
+    | "not_attempted";
+  image_error: string | null;
   status: AIDraftStatus;
   error_message: string | null;
   created_product_id: string | null;

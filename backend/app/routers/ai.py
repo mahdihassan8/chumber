@@ -86,6 +86,16 @@ def confirm_product_draft(
     return AIProductDraftRead.model_validate(draft)
 
 
+@router.post("/products/{draft_id}/retry-image", response_model=AIProductDraftRead)
+def retry_product_draft_image(
+    draft_id: uuid.UUID, _: User = Depends(require_admin), db: Session = Depends(get_db)
+) -> AIProductDraftRead:
+    """Re-runs the image pipeline only. The admin's reviewed name, description
+    and price are untouched."""
+    draft = ai_product_service.retry_image(db, draft_id)
+    return AIProductDraftRead.model_validate(draft)
+
+
 @router.post("/products/{draft_id}/reject", response_model=AIProductDraftRead)
 def reject_product_draft(
     draft_id: uuid.UUID, _: User = Depends(require_admin), db: Session = Depends(get_db)

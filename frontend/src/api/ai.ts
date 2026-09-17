@@ -37,3 +37,9 @@ export function confirmAIProduct(id: string, payload: ConfirmAIProductPayload): 
 export function rejectAIProduct(id: string): Promise<AIProductDraft> {
   return api.post<AIProductDraft>(`/api/ai/products/${id}/reject`);
 }
+
+/** Re-runs only the image pipeline; the reviewed name/description/price are
+ * left as they are. */
+export function retryAIProductImage(id: string): Promise<AIProductDraft> {
+  return api.post<AIProductDraft>(`/api/ai/products/${id}/retry-image`);
+}
