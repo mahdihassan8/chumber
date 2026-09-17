@@ -3,7 +3,6 @@ autogenerate and for `Base.metadata.create_all()` in tests.
 """
 
 from app.models.ai import AIRequestInputType, AIRequestStatus, AIRestockRequest
-from app.models.ai_product_draft import AIProductDraft
 from app.models.cart import Cart, CartItem
 from app.models.chumber_requirement import ChumberRequirement
 from app.models.giveaway import Giveaway, GiveawayWinner
@@ -16,7 +15,6 @@ from app.models.user import Region, User, UserRole
 from app.models.user_region import UserRegion
 
 __all__ = [
-    "AIProductDraft",
     "AIRequestInputType",
     "AIRequestStatus",
     "AIRestockRequest",
